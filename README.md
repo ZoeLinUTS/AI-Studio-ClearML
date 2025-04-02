@@ -108,6 +108,9 @@ python step2_data_preprocessing.py
 python step3_train_model.py
 ```
 
+### Code at Colab to Initial ClearML Agent
+![image](https://github.com/user-attachments/assets/9e82774b-e2d3-474f-b830-42cd635b6f83)
+
 ---
 
 ## 📘 References
