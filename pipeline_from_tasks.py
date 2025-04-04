@@ -28,10 +28,10 @@ def run_pipeline():
         name="Pipeline demo", project="examples", version="0.0.1", add_pipeline_tags=False
     )
 
-    pipe.add_parameter(
-        "url",
-        "dataset_url",
-    )
+    # pipe.add_parameter(
+    #     "url",
+    #     "dataset_url",
+    # )
 
     pipe.set_default_execution_queue("pipeline")
 
