@@ -103,7 +103,7 @@ Run the agent for queue worker:
 Once all base tasks are registered, run the pipeline:
 
 ```bash
-python pipeline_from_tasks.py
+python main.py # Where we execute the run_pipeline()
 ```
 
 ---
