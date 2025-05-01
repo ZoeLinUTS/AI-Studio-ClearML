@@ -11,15 +11,22 @@ from tqdm import tqdm
 task = Task.init(project_name="AI_Studio_Demo", task_name="Pipeline step 3 train model")
 logger = Logger.current_logger()
 
-# Arguments
 args = {
-    # 'dataset_task_id': 'd69cec0ccc5a4c6b8900e61489b01847', # replace the value only when you need debug locally
-    'dataset_task_id':''
+    'dataset_task_id': '86f09f66d88c4ec7819f05b086deea15', # update id if it needs running locally
+    'num_epochs': 20,
+    'batch_size': 16,
+    'dataset_task_id': '',
+
+    # ✅ HPO
+    'learning_rate': 1e-3,
+    'weight_decay': 1e-5,
 }
+
 task.connect(args)
 
 # only create the task, we will actually execute it later
-task.execute_remotely() # After passing local testing, you should uncomment this command to initial task to ClearML
+# task.execute_remotely() # After passing local testing, you should uncomment this command to initial task to ClearML
+
 
 print('Retrieving Iris dataset')
 dataset_task = Task.get_task(task_id=args['dataset_task_id'])
@@ -50,22 +57,16 @@ y_test_tensor = torch.tensor(y_test, dtype=torch.long)
 
 # Create DataLoader
 train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-
+train_loader = DataLoader(train_dataset, batch_size=args['batch_size'], shuffle=True)
 # Hyperparameters
-args = {
-    'input_size': X_train.shape[1],
-    'num_classes': len(set(y_train)),
-    'num_epochs': 20,
-    'batch_size': 32,
-    'learning_rate': 1e-3,
-    'weight_decay': 1e-5,
-}
-
 # Initialize the model, loss function, and optimizer
-model = SimpleNN(input_size=args['input_size'], num_classes=args['num_classes'])
+model = SimpleNN(input_size=X_train.shape[1], num_classes=len(set(y_train)))
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=args['learning_rate'], weight_decay=args['weight_decay'])
+optimizer = optim.Adam(
+    model.parameters(),
+    lr=args['learning_rate'],
+    weight_decay=args['weight_decay']
+)
 
 for epoch in tqdm(range(args['num_epochs']), desc='Training Epochs'):
     epoch_loss = 0.0
@@ -96,6 +97,7 @@ with torch.no_grad():
     outputs = model(X_test_tensor)
     _, predicted = torch.max(outputs, 1)
     accuracy = (predicted == y_test_tensor).float().mean().item()
+    logger.report_scalar("validation_accuracy", "score", value=accuracy, iteration=0)
 
 print(f'Model trained & stored with accuracy: {accuracy:.4f}')
 

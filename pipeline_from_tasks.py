@@ -1,9 +1,9 @@
 from clearml import Task
 from clearml.automation import PipelineController
-import os
-os.environ["CLEARML_API_ACCESS_KEY"] = os.getenv("CLEARML_API_ACCESS_KEY")
-os.environ["CLEARML_API_SECRET_KEY"] = os.getenv("CLEARML_API_SECRET_KEY")
-os.environ["CLEARML_API_HOST"] = os.getenv("CLEARML_API_HOST")
+# import os
+# os.environ["CLEARML_API_ACCESS_KEY"] = os.getenv("CLEARML_API_ACCESS_KEY")
+# os.environ["CLEARML_API_SECRET_KEY"] = os.getenv("CLEARML_API_SECRET_KEY")
+# os.environ["CLEARML_API_HOST"] = os.getenv("CLEARML_API_HOST")
 
 def pre_execute_callback_example(a_pipeline, a_node, current_param_override):
     # type (PipelineController, PipelineController.Node, dict) -> bool
@@ -76,5 +76,5 @@ def run_pipeline():
 
     # Starting the pipeline (in the background)
     # pipe.start(queue="task")
-    pipe.start(queue="pipeline_controller")  # 控制器任务队列
+    pipe.start(queue="pipeline_controller")
     print("done")

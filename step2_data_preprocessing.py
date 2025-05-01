@@ -11,8 +11,8 @@ task = Task.init(project_name="AI_Studio_Demo", task_name="Pipeline step 2 proce
 # Use either dataset_task_id to point to a tasks artifact or
 # use a direct url with dataset_url
 args = {
-    # 'dataset_task_id': 'f41a62beb10b4db0b15cc683102fae12', #update id if it needs running locally
-    'dataset_task_id': '',  # update id if it needs running locally
+    'dataset_task_id': '3ceaa4409a70486b846e35bcbf229eab', #update id if it needs running locally
+    # 'dataset_task_id': '',  # update id if it needs running locally
     'dataset_url': '',
     'random_state': 42,
     'test_size': 0.2,
@@ -23,7 +23,7 @@ task.connect(args)
 print('Arguments: {}'.format(args))
 
 # only create the task, we will actually execute it later
-task.execute_remotely()
+# task.execute_remotely()
 
 # get dataset from task's artifact
 if args['dataset_task_id']:
