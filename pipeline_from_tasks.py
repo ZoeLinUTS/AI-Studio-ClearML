@@ -75,6 +75,6 @@ def run_pipeline():
     # pipe.start_locally()
 
     # Starting the pipeline (in the background)
-    # pipe.start(queue="task")
-    pipe.start(queue="pipeline_controller")  # 控制器任务队列
+    # pipe.start(queue="use_diffent_queue_name_for_pipeline_itself")
+
     print("done")
