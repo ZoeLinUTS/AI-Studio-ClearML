@@ -27,4 +27,4 @@ jobs:
           CLEARML_API_SECRET_KEY: ${{ secrets.CLEARML_API_SECRET_KEY }}
           CLEARML_API_HOST: ${{ secrets.CLEARML_API_HOST }}
         run: |
-          python pipeline/main.py
+          python main.py
