@@ -1,20 +1,20 @@
 import matplotlib.pyplot as plt
-import numpy as np
 from clearml import Task, Logger
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from tqdm import tqdm
 
 # Connecting ClearML with the current process,
-# from here on everything is logged automatically
-task = Task.init(project_name="examples", task_name="Pipeline step 3 train model")
+task = Task.init(project_name="AI_Studio_Demo", task_name="Pipeline step 3 train model")
 logger = Logger.current_logger()
 
 # Arguments
 args = {
-    'dataset_task_id': '', # replace the value only when you need debug locally
+    # 'dataset_task_id': 'd69cec0ccc5a4c6b8900e61489b01847', # replace the value only when you need debug locally
+    'dataset_task_id':''
 }
 task.connect(args)
 
@@ -52,23 +52,45 @@ y_test_tensor = torch.tensor(y_test, dtype=torch.long)
 train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
-# Initialize the model, loss function, and optimizer
-model = SimpleNN(input_size=X_train.shape[1], num_classes=len(set(y_train)))
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+# Hyperparameters
+args = {
+    'input_size': X_train.shape[1],
+    'num_classes': len(set(y_train)),
+    'num_epochs': 20,
+    'batch_size': 32,
+    'learning_rate': 1e-3,
+    'weight_decay': 1e-5,
+}
 
-# Train the model
-num_epochs = 20
-for epoch in range(num_epochs):
+# Initialize the model, loss function, and optimizer
+model = SimpleNN(input_size=args['input_size'], num_classes=args['num_classes'])
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=args['learning_rate'], weight_decay=args['weight_decay'])
+
+for epoch in tqdm(range(args['num_epochs']), desc='Training Epochs'):
+    epoch_loss = 0.0
+
     for inputs, labels in train_loader:
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
-        logger.report_scalar(title='train', series='loss', value=loss.item(), iteration=epoch)
 
-# Evaluate the model
+        # 累积 loss
+        epoch_loss += loss.item()
+
+    avg_loss = epoch_loss / len(train_loader)
+    logger.report_scalar(title='train', series='epoch_loss', value=avg_loss, iteration=epoch)
+
+# Save model
+model_path = 'assets/model.pkl'
+torch.save(model.state_dict(), model_path)
+task.upload_artifact(name='model', artifact_object=model_path)
+print('Model saved and uploaded as artifact')
+
+# Load model for evaluation
+model.load_state_dict(torch.load(model_path))
 model.eval()
 with torch.no_grad():
     outputs = model(X_test_tensor)
@@ -77,25 +99,17 @@ with torch.no_grad():
 
 print(f'Model trained & stored with accuracy: {accuracy:.4f}')
 
-# Plotting (same as before)
-x_min, x_max = X_test[:, 0].min() - .5, X_test[:, 0].max() + .5
-y_min, y_max = X_test[:, 1].min() - .5, X_test[:, 1].max() + .5
-h = .02  # step size in the mesh
-xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-plt.figure(1, figsize=(4, 3))
 
+# Plotting confusion matrix
+species_mapping = {0: 'Setosa', 1: 'Versicolor', 2: 'Virginica'}
+y_test_names = [species_mapping[label.item()] for label in y_test]
+predicted_names = [species_mapping[label.item()] for label in predicted]
 
-plt.scatter(X_test[:, 0], X_test[:, 1], c=y_test, edgecolors='k', cmap=plt.cm.Paired)
-plt.xlabel('Sepal length')
-plt.ylabel('Sepal width')
+cm = confusion_matrix(y_test_names, predicted_names, labels=list(species_mapping.values()))
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=list(species_mapping.values()))
+disp.plot(cmap=plt.cm.Blues)
 
-plt.xlim(xx.min(), xx.max())
-plt.ylim(yy.min(), yy.max())
-plt.xticks(())
-plt.yticks(())
+plt.title('Confusion Matrix')
+plt.savefig('assets/confusion_matrix.png')
 
-plt.title('Iris Types')
-plt.show()
-plt.savefig('iris_plot.png')
-
-print('Done')
+print('Confusion matrix plotted and saved as confusion_matrix.png')

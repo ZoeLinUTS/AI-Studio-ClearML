@@ -10,5 +10,3 @@ if __name__ == '__main__':
     print_hi('AI Studio')
     run_pipeline()
 
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
