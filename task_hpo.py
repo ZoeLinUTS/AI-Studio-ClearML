@@ -18,6 +18,7 @@ task.execute_remotely()
 # Configure the HPO process
 optimizer = OptimizerOptuna(
     base_task_id=BASE_TRAIN_TASK_ID,  # Use the actual training model as base
+    execution_queue="pipeline_controller",  # Specify the execution queue
     hyper_parameters=[
         {
             "name": "learning_rate",
