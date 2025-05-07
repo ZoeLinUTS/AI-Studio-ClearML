@@ -1,11 +1,12 @@
 from clearml import Task
 from clearml.automation.optuna import OptimizerOptuna
 
-# ✅  "Pipeline step 3 train model" Task ID
-BASE_TRAIN_TASK_ID = "replace_with_your_training_task_id"
+# Get the actual training model task
+BASE_TRAIN_TASK_ID = Task.get_task(project_name="AI_Studio_Demo", task_name="Pipeline step 3 train model").id
 
+# Configure the HPO process
 optimizer = OptimizerOptuna(
-    base_task_id=BASE_TRAIN_TASK_ID,
+    base_task_id=BASE_TRAIN_TASK_ID,  # Use the actual training model as base
     hyper_parameters=[
         {
             "name": "learning_rate",
@@ -29,15 +30,22 @@ optimizer = OptimizerOptuna(
             "step": 16
         }
     ],
-    objective_metric='validation_accuracy',   #
-    objective_metric_goal='maximize',
-    num_concurrent_workers=2,
-    max_iteration_per_job=1,
-    total_max_jobs=10,
+    objective_metric='validation_accuracy',  # Metric to optimize
+    objective_metric_goal='maximize',        # Try to maximize validation accuracy
+    num_concurrent_workers=2,               # Run 2 trials in parallel
+    max_iteration_per_job=1,                # Each trial runs once
+    total_max_jobs=10,                      # Total number of trials to run
     project_name="AI_Studio_Demo",
     task_name="HPO: Train Model"
 )
 
+# Set time limit for the entire HPO process
 optimizer.set_time_limit(in_minutes=60)
 
+# Start the HPO process
+# This will:
+# 1. Clone the template task 10 times
+# 2. Run each clone with different hyperparameters
+# 3. Track which combination gives the best validation accuracy
+# 4. Save the best parameters in the HPO task
 optimizer.start()

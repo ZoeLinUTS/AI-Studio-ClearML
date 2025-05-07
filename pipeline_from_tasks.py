@@ -63,12 +63,27 @@ def run_pipeline():
         },
     )
 
+    # Add HPO step using template training task
     pipe.add_step(
-        name="stage_train",
+        name="stage_hpo",
         parents=["stage_process"],
         base_task_project="AI_Studio_Demo",
+        base_task_name="HPO: Train Model",
+        parameter_override={
+            "General/dataset_task_id": "${stage_process.id}"  # Pass dataset ID to HPO
+        },
+    )
+
+    # Add actual training step using optimized parameters
+    pipe.add_step(
+        name="stage_train",
+        parents=["stage_hpo"],
+        base_task_project="AI_Studio_Demo",
         base_task_name="Pipeline step 3 train model",
-        parameter_override={"General/dataset_task_id": "${stage_process.id}"},
+        parameter_override={
+            "General/dataset_task_id": "${stage_process.id}",  # Use processed dataset
+            "General/hpo_task_id": "${stage_hpo.id}"  # Get optimized parameters from HPO
+        },
     )
 
     # for debugging purposes use local jobs

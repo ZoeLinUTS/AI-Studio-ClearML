@@ -12,12 +12,9 @@ task = Task.init(project_name="AI_Studio_Demo", task_name="Pipeline step 3 train
 logger = Logger.current_logger()
 
 args = {
-    'dataset_task_id': '86f09f66d88c4ec7819f05b086deea15', # update id if it needs running locally
+    'dataset_task_id': '',  # Will be set from pipeline
     'num_epochs': 20,
     'batch_size': 16,
-    'dataset_task_id': '',
-
-    # ✅ HPO
     'learning_rate': 1e-3,
     'weight_decay': 1e-5,
 }
@@ -27,6 +24,15 @@ task.connect(args)
 # only create the task, we will actually execute it later
 # task.execute_remotely() # After passing local testing, you should uncomment this command to initial task to ClearML
 
+# Retrieve the HPO task ID from the pipeline
+hpo_task_id = task.get_parameter("General/hpo_task_id")
+hpo_task = Task.get_task(task_id=hpo_task_id)
+
+# Retrieve optimized parameters from the HPO task
+optimized_params = hpo_task.get_parameters()
+args['learning_rate'] = optimized_params.get('learning_rate', args['learning_rate'])
+args['weight_decay'] = optimized_params.get('weight_decay', args['weight_decay'])
+args['batch_size'] = optimized_params.get('batch_size', args['batch_size'])
 
 print('Retrieving Iris dataset')
 dataset_task = Task.get_task(task_id=args['dataset_task_id'])
