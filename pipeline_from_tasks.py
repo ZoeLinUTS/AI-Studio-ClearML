@@ -43,6 +43,7 @@ def run_pipeline():
     # )
 
     # Set default queue for pipeline control
+    # Note: The HPO task will run on pipeline_controller, but its test tasks will run on the default queue
     pipe.set_default_execution_queue("pipeline_controller")
 
     pipe.add_step(
@@ -66,6 +67,7 @@ def run_pipeline():
     )
 
     # Add HPO step using template training task
+    # The HPO task itself runs on pipeline_controller, but its test tasks will run on the default queue
     pipe.add_step(
         name="stage_hpo",
         parents=["stage_process"],
@@ -73,7 +75,8 @@ def run_pipeline():
         base_task_name="HPO: Train Model",
         execution_queue="pipeline_controller",
         parameter_override={
-            "General/dataset_task_id": "${stage_process.id}"  # Pass dataset ID to HPO
+            "General/dataset_task_id": "${stage_process.id}",  # Pass dataset ID to HPO
+            "test_queue": "default"  # Specify the queue for HPO test tasks
         },
     )
 
