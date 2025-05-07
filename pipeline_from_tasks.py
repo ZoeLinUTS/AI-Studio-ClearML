@@ -76,7 +76,7 @@ def run_pipeline():
         execution_queue="pipeline_controller",
         parameter_override={
             "General/dataset_task_id": "${stage_process.id}",  # Pass dataset ID to HPO
-            "test_queue": "default"  # Specify the queue for HPO test tasks
+            "General/test_queue": "default"  # Specify the queue for HPO test tasks
         },
     )
 
