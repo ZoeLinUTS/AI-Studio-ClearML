@@ -1,12 +1,17 @@
-name: Run ClearML Pipeline
+name: Run ClearML Task
 
 on:
-  push:
-    branches: [ main ]
+  pull_request:
+    branches: [main]
 
 jobs:
   run_pipeline:
     runs-on: ubuntu-latest
+
+    env:  # ✅ env:  # Global environment variables for all steps
+      CLEARML_API_ACCESS_KEY: ${{ secrets.CLEARML_API_ACCESS_KEY }}
+      CLEARML_API_SECRET_KEY: ${{ secrets.CLEARML_API_SECRET_KEY }}
+      CLEARML_API_HOST: ${{ secrets.CLEARML_API_HOST }}
 
     steps:
       - uses: actions/checkout@v3
@@ -21,10 +26,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run pipeline
-        env:
-          CLEARML_API_ACCESS_KEY: ${{ secrets.CLEARML_API_ACCESS_KEY }}
-          CLEARML_API_SECRET_KEY: ${{ secrets.CLEARML_API_SECRET_KEY }}
-          CLEARML_API_HOST: ${{ secrets.CLEARML_API_HOST }}
+      - name: Debug ENV
         run: |
-          python main.py
+          echo "CLEARML_API_HOST=$CLEARML_API_HOST"
+          if [ -z "$CLEARML_API_HOST" ]; then echo "❌ HOST is empty!"; exit 1; fi
+          curl -I $CLEARML_API_HOST
+
+      - name: Run pipeline
+        run: |
+          python s1_dataset_artifact.py
