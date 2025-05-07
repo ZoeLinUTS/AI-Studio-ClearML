@@ -28,7 +28,9 @@ args = {
     'base_train_task_id': BASE_TRAIN_TASK_ID,
     'num_trials': 10,
     'time_limit_minutes': 60,
-    'run_as_service': False
+    'run_as_service': False,
+    'execution_queue': 'default',  # Queue for test tasks
+    'worker_id': 'default_worker'  # Worker ID for test tasks
 }
 args = task.connect(args)
 
@@ -81,7 +83,8 @@ try:
         task_name="HPO: Train Model",
         time_limit_per_job=10,             # Time limit per job in minutes
         pool_period_min=0.1,               # Check tasks every 6 seconds
-        execution_queue_override="default"  # Queue for the training tasks
+        execution_queue_override=args['execution_queue'],  # Use the parameter for test tasks
+        worker_id_override=args['worker_id']  # Use the parameter for worker ID
     )
     logger.info("Successfully created optimizer")
 except Exception as e:

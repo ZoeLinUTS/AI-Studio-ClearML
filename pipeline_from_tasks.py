@@ -42,13 +42,14 @@ def run_pipeline():
     #     description="URL of the dataset"
     # )
 
+    # Set default queue for pipeline control
     pipe.set_default_execution_queue("pipeline_controller")
 
     pipe.add_step(
         name="stage_data",
         base_task_project="AI_Studio_Demo",
         base_task_name="Pipeline step 1 dataset artifact",
-        # parameter_override={"General/dataset_url": "${pipeline.url}"},
+        execution_queue="pipeline_controller"
     )
 
     pipe.add_step(
@@ -56,6 +57,7 @@ def run_pipeline():
         parents=["stage_data"],
         base_task_project="AI_Studio_Demo",
         base_task_name="Pipeline step 2 process dataset",
+        execution_queue="pipeline_controller",
         parameter_override={
             "General/dataset_task_id": "${stage_data.id}",
             "General/test_size": 0.25,
@@ -69,6 +71,7 @@ def run_pipeline():
         parents=["stage_process"],
         base_task_project="AI_Studio_Demo",
         base_task_name="HPO: Train Model",
+        execution_queue="pipeline_controller",
         parameter_override={
             "General/dataset_task_id": "${stage_process.id}"  # Pass dataset ID to HPO
         },
@@ -80,6 +83,7 @@ def run_pipeline():
         parents=["stage_process", "stage_hpo"],  # Depend on both processing and HPO
         base_task_project="AI_Studio_Demo",
         base_task_name="Pipeline step 3 train model",
+        execution_queue="pipeline_controller",  # Keep main training on pipeline_controller
         parameter_override={
             "General/dataset_task_id": "${stage_process.id}",  # Use processed dataset
             "General/hpo_task_id": "${stage_hpo.id}"  # Get optimized parameters from HPO
