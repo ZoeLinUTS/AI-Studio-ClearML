@@ -103,7 +103,7 @@ with torch.no_grad():
     outputs = model(X_test_tensor)
     _, predicted = torch.max(outputs, 1)
     accuracy = (predicted == y_test_tensor).float().mean().item()
-    logger.report_scalar("validation_accuracy", "score", value=accuracy, iteration=0)
+    logger.report_scalar("validation", "accuracy", value=accuracy, iteration=0)
 
 print(f'Model trained & stored with accuracy: {accuracy:.4f}')
 
