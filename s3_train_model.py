@@ -112,6 +112,6 @@ disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=list(species_m
 disp.plot(cmap=plt.cm.Blues)
 
 plt.title('Confusion Matrix')
-plt.savefig('assets/confusion_matrix.png')
+plt.savefig('figs/confusion_matrix.png')
 
 print('Confusion matrix plotted and saved as confusion_matrix.png')
