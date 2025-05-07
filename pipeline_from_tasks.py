@@ -42,7 +42,7 @@ def run_pipeline():
     #     description="URL of the dataset"
     # )
 
-    pipe.set_default_execution_queue("task")
+    pipe.set_default_execution_queue("pipeline_controller")
 
     pipe.add_step(
         name="stage_data",
@@ -77,7 +77,7 @@ def run_pipeline():
     # Add actual training step using optimized parameters
     pipe.add_step(
         name="stage_train",
-        parents=["stage_hpo"],
+        parents=["stage_process", "stage_hpo"],  # Depend on both processing and HPO
         base_task_project="AI_Studio_Demo",
         base_task_name="Pipeline step 3 train model",
         parameter_override={

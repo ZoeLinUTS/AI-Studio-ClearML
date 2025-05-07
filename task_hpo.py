@@ -1,9 +1,20 @@
 from clearml import Task
 from clearml.automation.optuna import OptimizerOptuna
 
+# Initialize the HPO task
+task = Task.init(project_name="AI_Studio_Demo", task_name="HPO: Train Model")
+
 # Get the actual training model task
 BASE_TRAIN_TASK_ID = Task.get_task(project_name="AI_Studio_Demo", task_name="Pipeline step 3 train model").id
 
+# Connect parameters
+args = {
+    'base_train_task_id': BASE_TRAIN_TASK_ID,
+    'num_trials': 10,
+    'time_limit_minutes': 60
+}
+task.connect(args)
+task.execute_remotely()
 # Configure the HPO process
 optimizer = OptimizerOptuna(
     base_task_id=BASE_TRAIN_TASK_ID,  # Use the actual training model as base
@@ -34,13 +45,13 @@ optimizer = OptimizerOptuna(
     objective_metric_goal='maximize',        # Try to maximize validation accuracy
     num_concurrent_workers=2,               # Run 2 trials in parallel
     max_iteration_per_job=1,                # Each trial runs once
-    total_max_jobs=10,                      # Total number of trials to run
+    total_max_jobs=args['num_trials'],      # Total number of trials to run
     project_name="AI_Studio_Demo",
     task_name="HPO: Train Model"
 )
 
 # Set time limit for the entire HPO process
-optimizer.set_time_limit(in_minutes=60)
+optimizer.set_time_limit(in_minutes=args['time_limit_minutes'])
 
 # Start the HPO process
 # This will:
