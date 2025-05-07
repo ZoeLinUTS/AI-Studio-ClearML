@@ -69,7 +69,7 @@ def job_complete_callback(
 try:
     optimizer = HyperParameterOptimizer(
         base_task_id=BASE_TRAIN_TASK_ID,  # Use the actual training model as base
-        execution_queue="pipeline_controller",  # Specify the execution queue
+        execution_queue="pipeline_controller",  # Queue for the HPO task itself
         hyper_parameters=hyper_parameters,
         objective_metric_title="validation",
         objective_metric_series="accuracy",
@@ -80,7 +80,8 @@ try:
         project_name="AI_Studio_Demo",
         task_name="HPO: Train Model",
         time_limit_per_job=10,             # Time limit per job in minutes
-        pool_period_min=0.1                # Check tasks every 6 seconds
+        pool_period_min=0.1,               # Check tasks every 6 seconds
+        execution_queue_override="default"  # Queue for the training tasks
     )
     logger.info("Successfully created optimizer")
 except Exception as e:

@@ -6,6 +6,12 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from tqdm import tqdm
+import time
+import os
+
+# Create necessary directories
+os.makedirs('assets', exist_ok=True)
+os.makedirs('figs', exist_ok=True)
 
 # Connecting ClearML with the current process,
 task = Task.init(project_name="AI_Studio_Demo", task_name="Pipeline step 3 train model")
@@ -22,7 +28,7 @@ args = {
 task.connect(args)
 
 # only create the task, we will actually execute it later
-# task.execute_remotely() # After passing local testing, you should uncomment this command to initial task to ClearML
+task.execute_remotely() # After passing local testing, you should uncomment this command to initial task to ClearML
 
 # Retrieve the HPO task ID from the pipeline
 hpo_task_id = task.get_parameter("General/hpo_task_id")
@@ -36,12 +42,26 @@ args['batch_size'] = optimized_params.get('batch_size', args['batch_size'])
 
 print('Retrieving Iris dataset')
 dataset_task = Task.get_task(task_id=args['dataset_task_id'])
-X_train = dataset_task.artifacts['X_train'].get()
-X_test = dataset_task.artifacts['X_test'].get()
-y_train = dataset_task.artifacts['y_train'].get()
-y_test = dataset_task.artifacts['y_test'].get()
-print('Iris dataset loaded')
 
+# Wait for artifacts to be available
+max_retries = 5
+retry_delay = 10  # seconds
+for attempt in range(max_retries):
+    try:
+        print(f'Attempt {attempt + 1}/{max_retries} to load artifacts...')
+        X_train = dataset_task.artifacts['X_train'].get()
+        X_test = dataset_task.artifacts['X_test'].get()
+        y_train = dataset_task.artifacts['y_train'].get()
+        y_test = dataset_task.artifacts['y_test'].get()
+        print('Iris dataset loaded successfully')
+        break
+    except KeyError as e:
+        if attempt < max_retries - 1:
+            print(f'Artifacts not ready yet, waiting {retry_delay} seconds...')
+            time.sleep(retry_delay)
+        else:
+            print('Failed to load artifacts after maximum retries')
+            raise
 
 # Define a simple neural network
 class SimpleNN(nn.Module):
@@ -64,7 +84,7 @@ y_test_tensor = torch.tensor(y_test, dtype=torch.long)
 # Create DataLoader
 train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
 train_loader = DataLoader(train_dataset, batch_size=args['batch_size'], shuffle=True)
-# Hyperparameters
+
 # Initialize the model, loss function, and optimizer
 model = SimpleNN(input_size=X_train.shape[1], num_classes=len(set(y_train)))
 criterion = nn.CrossEntropyLoss()
@@ -84,7 +104,6 @@ for epoch in tqdm(range(args['num_epochs']), desc='Training Epochs'):
         loss.backward()
         optimizer.step()
 
-        # 累积 loss
         epoch_loss += loss.item()
 
     avg_loss = epoch_loss / len(train_loader)
@@ -106,7 +125,6 @@ with torch.no_grad():
     logger.report_scalar("validation", "accuracy", value=accuracy, iteration=0)
 
 print(f'Model trained & stored with accuracy: {accuracy:.4f}')
-
 
 # Plotting confusion matrix
 species_mapping = {0: 'Setosa', 1: 'Versicolor', 2: 'Virginica'}
