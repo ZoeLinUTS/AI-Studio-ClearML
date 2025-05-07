@@ -52,6 +52,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Debug ENV
+        run: |
+          echo $CLEARML_API_HOST
+          curl -I $CLEARML_API_HOST
+
       - name: Run pipeline
         env:
           CLEARML_API_ACCESS_KEY: ${{ secrets.CLEARML_API_ACCESS_KEY }}
