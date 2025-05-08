@@ -43,14 +43,13 @@ def run_pipeline():
     # )
 
     # Set default queue for pipeline control
-    # Note: The HPO task will run on pipeline, but its test tasks will run on the default queue
     pipe.set_default_execution_queue("pipeline")
 
     pipe.add_step(
         name="stage_data",
         base_task_project="AI_Studio_Demo",
         base_task_name="Pipeline step 1 dataset artifact",
-        execution_queue="pipeline"
+        execution_queue="pipeline"  # Keep on pipeline queue
     )
 
     pipe.add_step(
@@ -58,7 +57,7 @@ def run_pipeline():
         parents=["stage_data"],
         base_task_project="AI_Studio_Demo",
         base_task_name="Pipeline step 2 process dataset",
-        execution_queue="pipeline",
+        execution_queue="pipeline",  # Keep on pipeline queue
         parameter_override={
             "General/dataset_task_id": "${stage_data.id}",
             "General/test_size": 0.25,
@@ -74,22 +73,22 @@ def run_pipeline():
         base_task_name="HPO: Train Model",
         execution_queue="pipeline",
         parameter_override={
-            "General/dataset_task_id": "${stage_process.id}",  # Pass dataset ID to HPO
-            "General/test_queue": "pipeline"  # Specify the queue for HPO test tasks
+            "General/processed_dataset_id": "${stage_process.parameters.General/processed_dataset_id}",  # Pass dataset ID to HPO
+            "General/test_queue": "pipeline"
         }
     )
 
     # Add actual training step using optimized parameters
     pipe.add_step(
         name="stage_train",
-        parents=["stage_process", "stage_hpo"],  # Depend on both processing and HPO
+        parents=["stage_process", "stage_hpo"],
         base_task_project="AI_Studio_Demo",
         base_task_name="Pipeline step 3 train model",
-        execution_queue="pipeline",  # Keep main training on pipeline
+        execution_queue="pipeline",
         parameter_override={
-            "General/dataset_task_id": "${stage_process.id}",  # Use processed dataset
-            "General/hpo_task_id": "${stage_hpo.id}",  # Get optimized parameters from HPO
-            "General/test_queue": "pipeline"  # Specify the queue for test tasks
+            "General/processed_dataset_id": "${stage_process.parameters.General/processed_dataset_id}",  # Use processed dataset
+            "General/hpo_task_id": "${stage_hpo.id}",
+            "General/test_queue": "pipeline"
         }
     )
 
@@ -97,5 +96,5 @@ def run_pipeline():
     pipe.start_locally()
 
     # Starting the pipeline (in the background)
-    # pipe.start(queue="pipeline")
+    # pipe.start(queue="ge2025")  # Pipeline controller runs on ge2025 queue
     print("done")

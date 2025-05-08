@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from clearml import Task, Logger
+from clearml import Task, Logger, Dataset
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -19,7 +19,7 @@ logger = Logger.current_logger()
 
 # Connect parameters
 args = {
-    'dataset_task_id': '',  # Will be set from pipeline
+    'processed_dataset_id': '',  # Will be set from pipeline
     'num_epochs': 20,
     'batch_size': 16,
     'learning_rate': 1e-3,
@@ -31,73 +31,24 @@ task.connect(args)
 # Execute the task remotely
 task.execute_remotely()
 
-# Get the dataset task ID from pipeline parameters
-dataset_task_id = task.get_parameter('General/dataset_task_id')
-print(f"All task parameters: {task.get_parameters()}")
-print(f"Raw dataset task ID from parameters: {dataset_task_id}")
-
-if not dataset_task_id:
-    raise ValueError("Dataset task ID not found in parameters. Please ensure it's passed from the pipeline.")
+# Get the dataset ID from pipeline parameters
+dataset_id = task.get_parameter('General/processed_dataset_id')
+if not dataset_id:
+    raise ValueError("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
 
 print('Retrieving Iris dataset')
 
-# Wait for artifacts to be available
-max_retries = 20  # Increased from 10
-retry_delay = 30  # Increased from 20
-for attempt in range(max_retries):
-    try:
-        print(f'Attempt {attempt + 1}/{max_retries} to load artifacts...')
-        print(f'Dataset task ID: {dataset_task_id}')
-        dataset_task = Task.get_task(task_id=dataset_task_id)
-        print(f'Dataset task name: {dataset_task.name}')
-        print(f'Dataset task project: {dataset_task.project}')
-        print(f'Available artifacts: {list(dataset_task.artifacts.keys())}')
-        
-        # Add explicit wait for artifacts to be ready
-        if not dataset_task.artifacts:
-            print('No artifacts found, waiting...')
-            time.sleep(retry_delay)
-            continue
-            
-        # Try to get each artifact individually with better error handling
-        try:
-            X_train = dataset_task.artifacts['X_train'].get()
-            print('Successfully loaded X_train')
-        except Exception as e:
-            print(f'Error loading X_train: {str(e)}')
-            raise
-            
-        try:
-            X_test = dataset_task.artifacts['X_test'].get()
-            print('Successfully loaded X_test')
-        except Exception as e:
-            print(f'Error loading X_test: {str(e)}')
-            raise
-            
-        try:
-            y_train = dataset_task.artifacts['y_train'].get()
-            print('Successfully loaded y_train')
-        except Exception as e:
-            print(f'Error loading y_train: {str(e)}')
-            raise
-            
-        try:
-            y_test = dataset_task.artifacts['y_test'].get()
-            print('Successfully loaded y_test')
-        except Exception as e:
-            print(f'Error loading y_test: {str(e)}')
-            raise
-            
-        print('Iris dataset loaded successfully')
-        break
-    except (KeyError, Exception) as e:
-        print(f'Error loading artifacts: {str(e)}')
-        if attempt < max_retries - 1:
-            print(f'Artifacts not ready yet, waiting {retry_delay} seconds...')
-            time.sleep(retry_delay)
-        else:
-            print('Failed to load artifacts after maximum retries')
-            raise
+# Load the dataset from ClearML
+dataset = Dataset.get(dataset_id=dataset_id)
+print(f"Loaded dataset: {dataset.name}")
+
+# Get the dataframes
+X_train = dataset.get_dataframe("X_train").values
+X_test = dataset.get_dataframe("X_test").values
+y_train = dataset.get_dataframe("y_train").values.ravel()
+y_test = dataset.get_dataframe("y_test").values.ravel()
+
+print('Iris dataset loaded successfully')
 
 # Define a simple neural network
 class SimpleNN(nn.Module):
