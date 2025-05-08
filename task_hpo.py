@@ -75,7 +75,7 @@ def job_complete_callback(
 try:
     optimizer = HyperParameterOptimizer(
         base_task_id=BASE_TRAIN_TASK_ID,
-        execution_queue="pipeline",
+        execution_queue="pipeline",  # Main HPO task runs on pipeline
         hyper_parameters=hyper_parameters,
         objective_metric_title="validation",
         objective_metric_series="accuracy",
@@ -87,9 +87,9 @@ try:
         task_name="HPO: Train Model",
         time_limit_per_job=10,
         pool_period_min=0.1,
-        execution_queue_override="default",
+        execution_queue_override="pipeline",  # Changed from default to pipeline
         base_task_parameters={
-            'General/dataset_task_id': dataset_task_id  # Use the dataset task ID from pipeline
+            'General/dataset_task_id': dataset_task_id
         }
     )
     logger.info("Successfully created optimizer")

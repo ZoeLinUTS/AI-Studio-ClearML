@@ -63,11 +63,10 @@ def run_pipeline():
             "General/dataset_task_id": "${stage_data.id}",
             "General/test_size": 0.25,
             "General/random_state": 42
-        },
+        }
     )
 
     # Add HPO step using template training task
-    # The HPO task itself runs on pipeline, but its test tasks will run on the default queue
     pipe.add_step(
         name="stage_hpo",
         parents=["stage_process"],
@@ -76,8 +75,8 @@ def run_pipeline():
         execution_queue="pipeline",
         parameter_override={
             "General/dataset_task_id": "${stage_process.id}",  # Pass dataset ID to HPO
-            "General/test_queue": "default"  # Specify the queue for HPO test tasks
-        },
+            "General/test_queue": "pipeline"  # Specify the queue for HPO test tasks
+        }
     )
 
     # Add actual training step using optimized parameters
@@ -89,8 +88,9 @@ def run_pipeline():
         execution_queue="pipeline",  # Keep main training on pipeline
         parameter_override={
             "General/dataset_task_id": "${stage_process.id}",  # Use processed dataset
-            "General/hpo_task_id": "${stage_hpo.id}"  # Get optimized parameters from HPO
-        },
+            "General/hpo_task_id": "${stage_hpo.id}",  # Get optimized parameters from HPO
+            "General/test_queue": "pipeline"  # Specify the queue for test tasks
+        }
     )
 
     # for debugging purposes use local jobs
