@@ -29,17 +29,17 @@ args = {
     'num_trials': 10,
     'time_limit_minutes': 60,
     'run_as_service': False,
-    'test_queue': 'default',  # Queue for test tasks
-    'dataset_task_id': ''  # Will be set from pipeline
+    'test_queue': 'pipeline',  # Queue for test tasks
+    'processed_dataset_id': ''  # Will be set from pipeline
 }
 args = task.connect(args)
 
 # Execute the task remotely
 task.execute_remotely()
 
-# Get the dataset task ID from pipeline parameters
-dataset_task_id = task.get_parameter('General/dataset_task_id')
-logger.info(f"Using dataset task ID: {dataset_task_id}")
+# Get the dataset ID from pipeline parameters
+dataset_id = task.get_parameter('General/processed_dataset_id')
+logger.info(f"Using processed dataset ID: {dataset_id}")
 
 # Define hyperparameters to optimize
 hyper_parameters = [
@@ -75,7 +75,7 @@ def job_complete_callback(
 try:
     optimizer = HyperParameterOptimizer(
         base_task_id=BASE_TRAIN_TASK_ID,
-        execution_queue="pipeline",  # Main HPO task runs on pipeline
+        execution_queue="pipeline",
         hyper_parameters=hyper_parameters,
         objective_metric_title="validation",
         objective_metric_series="accuracy",
@@ -87,9 +87,9 @@ try:
         task_name="HPO: Train Model",
         time_limit_per_job=10,
         pool_period_min=0.1,
-        execution_queue_override="pipeline",  # Changed from default to pipeline
+        execution_queue_override="pipeline",
         base_task_parameters={
-            'General/dataset_task_id': dataset_task_id
+            'General/processed_dataset_id': dataset_id  # Pass the dataset ID to training tasks
         }
     )
     logger.info("Successfully created optimizer")
