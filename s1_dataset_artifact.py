@@ -7,7 +7,7 @@ import os
 task = Task.init(project_name="AI_Studio_Demo", task_name="Pipeline step 1 dataset artifact")
 
 # only create the task, we will actually execute it later
-# task.execute_remotely()
+task.execute_remotely()
 
 # Check if the local dataset file exists
 local_iris_csv_path = 'work_dataset/Iris.csv'

@@ -94,8 +94,8 @@ def run_pipeline():
     )
 
     # for debugging purposes use local jobs
-    # pipe.start_locally()
+    pipe.start_locally()
 
     # Starting the pipeline (in the background)
-    pipe.start(queue="pipeline")
+    # pipe.start(queue="pipeline")
     print("done")
