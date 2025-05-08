@@ -41,14 +41,16 @@ args['weight_decay'] = optimized_params.get('weight_decay', args['weight_decay']
 args['batch_size'] = optimized_params.get('batch_size', args['batch_size'])
 
 print('Retrieving Iris dataset')
-dataset_task = Task.get_task(task_id=args['dataset_task_id'])
 
 # Wait for artifacts to be available
-max_retries = 5
-retry_delay = 10  # seconds
+max_retries = 10  # Increased from 5
+retry_delay = 20  # Increased from 10
 for attempt in range(max_retries):
     try:
         print(f'Attempt {attempt + 1}/{max_retries} to load artifacts...')
+        print(f'Dataset task ID: {args["dataset_task_id"]}')
+        dataset_task = Task.get_task(task_id=args['dataset_task_id'])
+        print(f'Available artifacts: {list(dataset_task.artifacts.keys())}')
         X_train = dataset_task.artifacts['X_train'].get()
         X_test = dataset_task.artifacts['X_test'].get()
         y_train = dataset_task.artifacts['y_train'].get()
