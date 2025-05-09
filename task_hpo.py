@@ -22,7 +22,11 @@ args = {
     'time_limit_minutes': 60,
     'run_as_service': False,
     'test_queue': 'pipeline',  # Queue for test tasks
-    'processed_dataset_id': ''  # Will be set from pipeline
+    'processed_dataset_id': '',  # Will be set from pipeline
+    'num_epochs': 50,  # Maximum number of epochs for HPO trials
+    'batch_size': 32,  # Default batch size
+    'learning_rate': 1e-3,  # Default learning rate
+    'weight_decay': 1e-5  # Default weight decay
 }
 args = task.connect(args)
 logger.info(f"Connected parameters: {args}")
@@ -58,10 +62,10 @@ except Exception as e:
 hpo_task = HyperParameterOptimizer(
     base_task_id=BASE_TRAIN_TASK_ID,
     hyper_parameters=[
-        UniformIntegerParameterRange('General/num_epochs', min_value=10, max_value=50),
-        UniformIntegerParameterRange('General/batch_size', min_value=8, max_value=32),
-        UniformParameterRange('General/learning_rate', min_value=1e-4, max_value=1e-2),
-        UniformParameterRange('General/weight_decay', min_value=1e-6, max_value=1e-4)
+        UniformIntegerParameterRange('General/num_epochs', min_value=10, max_value=args['num_epochs']),
+        UniformIntegerParameterRange('General/batch_size', min_value=8, max_value=args['batch_size']),
+        UniformParameterRange('General/learning_rate', min_value=1e-4, max_value=args['learning_rate']),
+        UniformParameterRange('General/weight_decay', min_value=1e-6, max_value=args['weight_decay'])
     ],
     objective_metric_title='validation',
     objective_metric_series='accuracy',
