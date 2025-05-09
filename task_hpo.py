@@ -90,7 +90,7 @@ hpo_task = HyperParameterOptimizer(
     pool_period_min=2.0,
     execution_queue=args['test_queue'],
     save_top_k_tasks_only=5,
-    parameter_override={
+    parameter_override={# This is for debug, you may not need them for your own project
         'processed_dataset_id': dataset_id,  # Pass the dataset ID without namespace
         'General/processed_dataset_id': dataset_id,  # Pass the dataset ID with namespace
         'test_queue': args['test_queue'],  # Pass the test queue without namespace
