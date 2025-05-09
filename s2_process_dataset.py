@@ -80,6 +80,10 @@ logger.info(f"Stored processed dataset ID: {dataset.id}")
 stored_id = task.get_parameter("General/processed_dataset_id")
 logger.info(f"Verified stored dataset ID: {stored_id}")
 
+# Also store as a task artifact
+task.upload_artifact(name='processed_dataset_id', artifact_object=str(dataset.id))
+logger.info(f"Stored dataset ID as task artifact: {dataset.id}")
+
 # Clean up temporary files
 for file in ["X_train.csv", "X_test.csv", "y_train.csv", "y_test.csv"]:
     if os.path.exists(file):

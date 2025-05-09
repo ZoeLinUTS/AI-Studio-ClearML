@@ -13,25 +13,6 @@ logger = logging.getLogger(__name__)
 # Queue configuration - using same queue for everything
 EXECUTION_QUEUE = "pipeline"
 
-def pre_execute_callback_example(a_pipeline, a_node, current_param_override):
-    # type (PipelineController, PipelineController.Node, dict) -> bool
-    logger.info(
-        "Cloning Task id={} with parameters: {}".format(
-            a_node.base_task_id, current_param_override
-        )
-    )
-    return True
-
-
-def post_execute_callback_example(a_pipeline, a_node):
-    # type (PipelineController, PipelineController.Node) -> None
-    logger.info("Completed Task id={}".format(a_node.executed))
-    # Log the parameters of the completed task
-    task = Task.get_task(task_id=a_node.executed)
-    logger.info(f"Task parameters: {task.get_parameters()}")
-    return
-
-
 def run_pipeline():
     # Connecting ClearML with the current pipeline
     pipe = PipelineController(
@@ -76,7 +57,10 @@ def run_pipeline():
         execution_queue=EXECUTION_QUEUE,
         parameter_override={
             "General/processed_dataset_id": "${stage_process.parameters.General/processed_dataset_id}",
-            "General/test_queue": EXECUTION_QUEUE
+            "General/test_queue": EXECUTION_QUEUE,
+            "General/num_trials": 10,
+            "General/time_limit_minutes": 60,
+            "General/run_as_service": False
         }
     )
 
@@ -98,9 +82,6 @@ def run_pipeline():
         }
     )
 
-    # Set callbacks for better logging
-    pipe.set_pre_step_callback(pre_execute_callback_example)
-    pipe.set_post_step_callback(post_execute_callback_example)
 
     # Start the pipeline locally but tasks will run on queue
     logger.info("Starting pipeline locally with tasks on queue: %s", EXECUTION_QUEUE)

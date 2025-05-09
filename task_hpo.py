@@ -1,6 +1,6 @@
 from clearml import Task, Dataset
 from clearml.automation import HyperParameterOptimizer
-from clearml.automation import UniformIntegerParameterRange, DiscreteParameterRange, UniformFloatParameterRange
+from clearml.automation import UniformIntegerParameterRange, UniformParameterRange
 import logging
 
 # Set up logging
@@ -15,13 +15,28 @@ task = Task.init(
     reuse_last_task_id=False
 )
 
+# Connect parameters
+args = {
+    'base_train_task_id': '',  # Will be set from pipeline
+    'num_trials': 10,
+    'time_limit_minutes': 60,
+    'run_as_service': False,
+    'test_queue': 'pipeline',  # Queue for test tasks
+    'processed_dataset_id': ''  # Will be set from pipeline
+}
+args = task.connect(args)
+logger.info(f"Connected parameters: {args}")
+
+# Execute the task remotely
+task.execute_remotely()
 
 # Get the dataset ID from pipeline parameters
 dataset_id = task.get_parameter('General/processed_dataset_id')
-if not dataset_id:
-    raise ValueError("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
-logger.info(f"Using processed dataset ID: {dataset_id}")
+logger.info(f"Received dataset ID from parameters: {dataset_id}")
 
+if not dataset_id:
+    logger.error("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
+    raise ValueError("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
 
 # Get the actual training model task
 try:
@@ -30,21 +45,6 @@ try:
 except Exception as e:
     logger.error(f"Failed to get base training task: {e}")
     raise
-
-# Connect parameters
-args = {
-    'base_train_task_id': BASE_TRAIN_TASK_ID,
-    'num_trials': 10,
-    'time_limit_minutes': 60,
-    'run_as_service': False,
-    'test_queue': 'pipeline',  # Queue for test tasks
-    'processed_dataset_id': dataset_id  # Will be set from pipeline
-}
-args = task.connect(args)
-
-# Execute the task remotely
-task.execute_remotely()
-
 
 # Verify dataset exists
 try:
@@ -56,12 +56,12 @@ except Exception as e:
 
 # Create the HPO task
 hpo_task = HyperParameterOptimizer(
-    base_task_id=args['base_train_task_id'],
+    base_task_id=BASE_TRAIN_TASK_ID,
     hyper_parameters=[
         UniformIntegerParameterRange('General/num_epochs', min_value=10, max_value=50),
         UniformIntegerParameterRange('General/batch_size', min_value=8, max_value=32),
-        UniformFloatParameterRange('General/learning_rate', min_value=1e-4, max_value=1e-2),
-        UniformFloatParameterRange('General/weight_decay', min_value=1e-6, max_value=1e-4)
+        UniformParameterRange('General/learning_rate', min_value=1e-4, max_value=1e-2),
+        UniformParameterRange('General/weight_decay', min_value=1e-6, max_value=1e-4)
     ],
     objective_metric_title='validation',
     objective_metric_series='accuracy',
@@ -76,11 +76,13 @@ hpo_task = HyperParameterOptimizer(
     execution_queue=args['test_queue'],
     save_top_k_tasks_only=5,
     parameter_override={
-        'General/processed_dataset_id': dataset_id  # Pass the dataset ID to test tasks
+        'General/processed_dataset_id': dataset_id,  # Pass the dataset ID to test tasks
+        'General/test_queue': args['test_queue']  # Pass the test queue
     }
 )
 
 # Start the HPO task
+logger.info("Starting HPO task...")
 hpo_task.start()
 
 # Get the top performing experiments
