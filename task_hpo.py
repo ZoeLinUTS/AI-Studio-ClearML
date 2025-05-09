@@ -91,7 +91,8 @@ hpo_task = HyperParameterOptimizer(
     execution_queue=args['test_queue'],
     save_top_k_tasks_only=5,
     parameter_override={
-        'General/processed_dataset_id': "99e286d358754697a37ad75c279a6f0a",  # Pass the dataset ID to test tasks
+        'processed_dataset_id': dataset_id,  # Pass the dataset ID without namespace
+        'General/processed_dataset_id': dataset_id,  # Pass the dataset ID with namespace
         'General/test_queue': args['test_queue'],  # Pass the test queue
         'General/num_epochs': args['num_epochs'],  # Pass default num_epochs
         'General/batch_size': args['batch_size'],  # Pass default batch_size
@@ -100,16 +101,31 @@ hpo_task = HyperParameterOptimizer(
     },
     base_task_name="Pipeline step 3 train model",  # Specify the base task name
     base_task_project="AI_Studio_Demo",  # Specify the base task project
-    base_task_type=Task.TaskTypes.training  # Specify the base task type
+    base_task_type=Task.TaskTypes.training,  # Specify the base task type
+    optimization_strategy='random'  # Use random search strategy
 )
 
 # Start the HPO task
 logger.info("Starting HPO task...")
 hpo_task.start()
 
-# Wait for some results
-logger.info("Waiting for initial results...")
-time.sleep(60)  # Wait 60 seconds for initial results
+# Wait for all trials to complete
+logger.info("Waiting for all trials to complete...")
+while True:
+    # Get current progress
+    progress = hpo_task.get_progress()
+    completed_jobs = progress.get('completed_jobs', 0)
+    total_jobs = args['num_trials']
+    
+    logger.info(f"Progress: {completed_jobs}/{total_jobs} trials completed")
+    
+    # Check if all jobs are completed
+    if completed_jobs >= total_jobs:
+        logger.info("All trials completed!")
+        break
+    
+    # Wait before checking again
+    time.sleep(60)  # Check every minute
 
 # Get the top performing experiments
 try:

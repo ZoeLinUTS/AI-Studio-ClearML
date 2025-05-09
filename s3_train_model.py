@@ -45,7 +45,11 @@ logger.info(f"Connected parameters: {args}")
 task.execute_remotely()
 
 # Get the dataset ID from pipeline parameters
-dataset_id = task.get_parameter('General/processed_dataset_id')
+dataset_id = task.get_parameter('processed_dataset_id')  # Try without namespace first
+if not dataset_id:
+    dataset_id = task.get_parameter('General/processed_dataset_id')  # Try with namespace
+    logger.info(f"Got dataset ID from General namespace: {dataset_id}")
+
 logger.info(f"Received dataset ID from parameters: {dataset_id}")
 
 if not dataset_id:
@@ -151,12 +155,16 @@ for epoch in tqdm(range(args['num_epochs']), desc="Training Epochs"):
     model.eval()
     correct = 0
     total = 0
+    all_predictions = []
+    all_targets = []
     with torch.no_grad():
         for batch_X, batch_y in test_loader:
             outputs = model(batch_X)
             _, predicted = torch.max(outputs.data, 1)
             total += batch_y.size(0)
             correct += (predicted == batch_y).sum().item()
+            all_predictions.extend(predicted.cpu().numpy())
+            all_targets.extend(batch_y.cpu().numpy())
     
     accuracy = 100 * correct / total
     # Report validation accuracy
@@ -183,8 +191,8 @@ print('Training completed successfully')
 
 # Plotting confusion matrix
 species_mapping = {0: 'Setosa', 1: 'Versicolor', 2: 'Virginica'}
-y_test_names = [species_mapping[label.item()] for label in y_test]
-predicted_names = [species_mapping[label.item()] for label in predicted]
+y_test_names = [species_mapping[label] for label in all_targets]
+predicted_names = [species_mapping[label] for label in all_predictions]
 
 cm = confusion_matrix(y_test_names, predicted_names, labels=list(species_mapping.values()))
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=list(species_mapping.values()))
