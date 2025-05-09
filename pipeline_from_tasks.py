@@ -48,10 +48,27 @@ def run_pipeline():
         }
     )
 
+    # Add initial training step
+    pipe.add_step(
+        name="stage_train",
+        parents=["stage_process"],
+        base_task_project="AI_Studio_Demo",
+        base_task_name="Pipeline step 3 train model",
+        execution_queue=EXECUTION_QUEUE,
+        parameter_override={
+            "General/processed_dataset_id": "${stage_process.parameters.General/processed_dataset_id}",
+            "General/test_queue": EXECUTION_QUEUE,
+            "General/num_epochs": 20,
+            "General/batch_size": 16,
+            "General/learning_rate": 1e-3,
+            "General/weight_decay": 1e-5
+        }
+    )
+
     # Add HPO step
     pipe.add_step(
         name="stage_hpo",
-        parents=["stage_process"],
+        parents=["stage_train"],
         base_task_project="AI_Studio_Demo",
         base_task_name="HPO: Train Model",
         execution_queue=EXECUTION_QUEUE,
