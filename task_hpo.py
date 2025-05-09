@@ -2,6 +2,7 @@ from clearml import Task, Dataset
 from clearml.automation import HyperParameterOptimizer
 from clearml.automation import UniformIntegerParameterRange, UniformParameterRange
 import logging
+import time
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -17,12 +18,12 @@ task = Task.init(
 
 # Connect parameters
 args = {
-    'base_train_task_id': '',  # Will be set from pipeline
+    'base_train_task_id': 'd462790f2efa4daea96ed0b7e1a1003c',  # Will be set from pipeline
     'num_trials': 10,
     'time_limit_minutes': 60,
     'run_as_service': False,
     'test_queue': 'pipeline',  # Queue for test tasks
-    'processed_dataset_id': '',  # Will be set from pipeline
+    'processed_dataset_id': '99e286d358754697a37ad75c279a6f0a',  # Will be set from pipeline
     'num_epochs': 50,  # Maximum number of epochs for HPO trials
     'batch_size': 32,  # Default batch size
     'learning_rate': 1e-3,  # Default learning rate
@@ -35,7 +36,17 @@ logger.info(f"Connected parameters: {args}")
 task.execute_remotely()
 
 # Get the dataset ID from pipeline parameters
-dataset_id = task.get_parameter('General/processed_dataset_id')
+dataset_id = task.get_parameter('General/processed_dataset_id')  # Get from General namespace
+if not dataset_id:
+    # Try getting from args as fallback
+    dataset_id = args.get('processed_dataset_id')
+    print(f"No dataset_id now get dataset ID from args: {dataset_id}")
+
+if not dataset_id:
+    # Use fixed dataset ID as last resort
+    dataset_id = "99e286d358754697a37ad75c279a6f0a"
+    print(f"Using fixed dataset ID: {dataset_id}")
+
 logger.info(f"Received dataset ID from parameters: {dataset_id}")
 
 if not dataset_id:
@@ -80,19 +91,41 @@ hpo_task = HyperParameterOptimizer(
     execution_queue=args['test_queue'],
     save_top_k_tasks_only=5,
     parameter_override={
-        'General/processed_dataset_id': dataset_id,  # Pass the dataset ID to test tasks
-        'General/test_queue': args['test_queue']  # Pass the test queue
-    }
+        'General/processed_dataset_id': "99e286d358754697a37ad75c279a6f0a",  # Pass the dataset ID to test tasks
+        'General/test_queue': args['test_queue'],  # Pass the test queue
+        'General/num_epochs': args['num_epochs'],  # Pass default num_epochs
+        'General/batch_size': args['batch_size'],  # Pass default batch_size
+        'General/learning_rate': args['learning_rate'],  # Pass default learning_rate
+        'General/weight_decay': args['weight_decay']  # Pass default weight_decay
+    },
+    base_task_name="Pipeline step 3 train model",  # Specify the base task name
+    base_task_project="AI_Studio_Demo",  # Specify the base task project
+    base_task_type=Task.TaskTypes.training  # Specify the base task type
 )
 
 # Start the HPO task
 logger.info("Starting HPO task...")
 hpo_task.start()
 
+# Wait for some results
+logger.info("Waiting for initial results...")
+time.sleep(60)  # Wait 60 seconds for initial results
+
 # Get the top performing experiments
 try:
     top_exp = hpo_task.get_top_experiments(top_k=3)
-    logger.info(f"Top experiments: {[t.id for t in top_exp]}")
+    if top_exp:
+        logger.info(f"Top experiments: {[t.id for t in top_exp]}")
+        for exp in top_exp:
+            # Get the last reported value for validation accuracy
+            metrics = exp.get_last_scalar_metrics()
+            if metrics and 'validation' in metrics and 'accuracy' in metrics['validation']:
+                accuracy = metrics['validation']['accuracy']
+                logger.info(f"Experiment {exp.id} accuracy: {accuracy}")
+            else:
+                logger.warning(f"Experiment {exp.id} has no validation accuracy metric")
+    else:
+        logger.warning("No experiments completed yet. This might be normal if the optimization just started.")
 except Exception as e:
     logger.error(f"Failed to get top experiments: {e}")
     raise

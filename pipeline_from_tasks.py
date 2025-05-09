@@ -60,20 +60,21 @@ def run_pipeline():
             "General/test_queue": EXECUTION_QUEUE,
             "General/num_trials": 10,
             "General/time_limit_minutes": 60,
-            "General/run_as_service": False
+            "General/run_as_service": False,
+            "General/dataset_task_id": "${stage_data.id}",
+            "General/base_train_task_id": "${stage_train.id}"
         }
     )
 
     # Add training step
     pipe.add_step(
         name="stage_train",
-        parents=["stage_process", "stage_hpo"],
+        parents=["stage_process"],
         base_task_project="AI_Studio_Demo",
         base_task_name="Pipeline step 3 train model",
         execution_queue=EXECUTION_QUEUE,
         parameter_override={
             "General/processed_dataset_id": "${stage_process.parameters.General/processed_dataset_id}",
-            "General/hpo_task_id": "${stage_hpo.id}",
             "General/test_queue": EXECUTION_QUEUE,
             "General/num_epochs": 20,
             "General/batch_size": 16,
@@ -81,6 +82,7 @@ def run_pipeline():
             "General/weight_decay": 1e-5
         }
     )
+
 
 
     # Start the pipeline locally but tasks will run on queue

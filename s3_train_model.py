@@ -20,21 +20,26 @@ logger = logging.getLogger(__name__)
 os.makedirs('assets', exist_ok=True)
 os.makedirs('figs', exist_ok=True)
 
-# Connecting ClearML with the current process
-task = Task.init(project_name="AI_Studio_Demo", task_name="Pipeline step 3 train model")
-clearml_logger = Logger.current_logger()
+# Initialize the task
+task = Task.init(
+    project_name='AI_Studio_Demo',
+    task_name='Pipeline step 3 train model',
+    task_type=Task.TaskTypes.training,
+    reuse_last_task_id=False
+)
 
 # Connect parameters
 args = {
-    'processed_dataset_id': '',  # Will be set from pipeline
+    'processed_dataset_id': '',
+    'hpo_task_id': '',
+    'test_queue': 'pipeline',
     'num_epochs': 20,
     'batch_size': 16,
     'learning_rate': 1e-3,
-    'weight_decay': 1e-5,
+    'weight_decay': 1e-5
 }
-
-task.connect(args)
-logger.info("Connected parameters: %s", args)
+args = task.connect(args)
+logger.info(f"Connected parameters: {args}")
 
 # Execute the task remotely
 task.execute_remotely()
@@ -44,39 +49,61 @@ dataset_id = task.get_parameter('General/processed_dataset_id')
 logger.info(f"Received dataset ID from parameters: {dataset_id}")
 
 if not dataset_id:
-    logger.error("Processed dataset ID is null or empty")
+    logger.error("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
     raise ValueError("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
 
-print('Retrieving Iris dataset')
+# Verify dataset exists
+try:
+    dataset = Dataset.get(dataset_id=dataset_id)
+    logger.info(f"Successfully verified dataset: {dataset.name}")
+except Exception as e:
+    logger.error(f"Failed to verify dataset: {e}")
+    raise
 
-# Load the dataset from ClearML
-dataset = Dataset.get(dataset_id=dataset_id)
-print(f"Loaded dataset: {dataset.name}")
+# Get the dataset files
+dataset_path = dataset.get_local_copy()
+logger.info(f"Dataset downloaded to: {dataset_path}")
 
-# Get the dataframes
-dataset_path = dataset.get_mutable_local_copy("X_train.csv")
-X_train = pd.read_csv(os.path.join(dataset_path, "X_train.csv")).values
+# Load the data
+X_train = pd.read_csv(os.path.join(dataset_path, 'X_train.csv'))
+X_test = pd.read_csv(os.path.join(dataset_path, 'X_test.csv'))
+y_train = pd.read_csv(os.path.join(dataset_path, 'y_train.csv'))
+y_test = pd.read_csv(os.path.join(dataset_path, 'y_test.csv'))
 
-dataset_path = dataset.get_mutable_local_copy("X_test.csv")
-X_test = pd.read_csv(os.path.join(dataset_path, "X_test.csv")).values
+# Clean up temporary files
+for file in ['X_train.csv', 'X_test.csv', 'y_train.csv', 'y_test.csv']:
+    try:
+        os.remove(os.path.join(dataset_path, file))
+        logger.info(f"Cleaned up temporary directory: {file}")
+    except Exception as e:
+        logger.warning(f"Failed to clean up {file}: {e}")
 
-dataset_path = dataset.get_mutable_local_copy("y_train.csv")
-y_train = pd.read_csv(os.path.join(dataset_path, "y_train.csv")).values.ravel()
+# Convert to numpy arrays
+X_train = X_train.values
+X_test = X_test.values
+y_train = y_train.values.ravel()
+y_test = y_test.values.ravel()
 
-dataset_path = dataset.get_mutable_local_copy("y_test.csv")
-y_test = pd.read_csv(os.path.join(dataset_path, "y_test.csv")).values.ravel()
+# Create data loaders
+train_dataset = TensorDataset(
+    torch.FloatTensor(X_train),
+    torch.LongTensor(y_train)
+)
+test_dataset = TensorDataset(
+    torch.FloatTensor(X_test),
+    torch.LongTensor(y_test)
+)
 
-# Clean up temporary files and directories
-for file in ["X_train.csv", "X_test.csv", "y_train.csv", "y_test.csv"]:
-    if os.path.exists(file):
-        if os.path.isdir(file):
-            shutil.rmtree(file)
-            logger.info(f"Cleaned up temporary directory: {file}")
-        else:
-            os.remove(file)
-            logger.info(f"Cleaned up temporary file: {file}")
-
-print('Iris dataset loaded successfully')
+train_loader = DataLoader(
+    train_dataset,
+    batch_size=args['batch_size'],
+    shuffle=True
+)
+test_loader = DataLoader(
+    test_dataset,
+    batch_size=args['batch_size'],
+    shuffle=False
+)
 
 # Define a simple neural network
 class SimpleNN(nn.Module):
@@ -90,17 +117,7 @@ class SimpleNN(nn.Module):
         x = self.fc2(x)
         return x
 
-# Convert data to PyTorch tensors
-X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
-y_train_tensor = torch.tensor(y_train, dtype=torch.long)
-X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
-y_test_tensor = torch.tensor(y_test, dtype=torch.long)
-
-# Create DataLoader
-train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-train_loader = DataLoader(train_dataset, batch_size=args['batch_size'], shuffle=True)
-
-# Initialize the model, loss function, and optimizer
+# Initialize model, loss function, and optimizer
 model = SimpleNN(input_size=X_train.shape[1], num_classes=len(set(y_train)))
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(
@@ -109,37 +126,60 @@ optimizer = optim.Adam(
     weight_decay=args['weight_decay']
 )
 
-for epoch in tqdm(range(args['num_epochs']), desc='Training Epochs'):
-    epoch_loss = 0.0
-
-    for inputs, labels in train_loader:
+# Training loop
+for epoch in tqdm(range(args['num_epochs']), desc="Training Epochs"):
+    model.train()
+    total_loss = 0
+    for batch_X, batch_y in train_loader:
         optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
+        outputs = model(batch_X)
+        loss = criterion(outputs, batch_y)
         loss.backward()
         optimizer.step()
+        total_loss += loss.item()
+    
+    avg_loss = total_loss / len(train_loader)
+    # Report training loss
+    task.get_logger().report_scalar(
+        title='train',
+        series='epoch_loss',
+        value=avg_loss,
+        iteration=epoch
+    )
+    
+    # Validation
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for batch_X, batch_y in test_loader:
+            outputs = model(batch_X)
+            _, predicted = torch.max(outputs.data, 1)
+            total += batch_y.size(0)
+            correct += (predicted == batch_y).sum().item()
+    
+    accuracy = 100 * correct / total
+    # Report validation accuracy
+    task.get_logger().report_scalar(
+        title='validation',
+        series='accuracy',
+        value=accuracy,
+        iteration=epoch
+    )
+    # Also report as a single value for HPO
+    task.get_logger().report_scalar(
+        title='validation',
+        series='accuracy',
+        value=accuracy,
+        iteration=0
+    )
 
-        epoch_loss += loss.item()
-
-    avg_loss = epoch_loss / len(train_loader)
-    clearml_logger.report_scalar(title='train', series='epoch_loss', value=avg_loss, iteration=epoch)
-
-# Save model
-model_path = 'assets/model.pkl'
+# Save the model
+model_path = os.path.join(os.getcwd(), 'model.pth')
 torch.save(model.state_dict(), model_path)
-task.upload_artifact(name='model', artifact_object=model_path)
-print('Model saved and uploaded as artifact')
+task.upload_artifact('model', model_path)
 
-# Load model for evaluation
-model.load_state_dict(torch.load(model_path))
-model.eval()
-with torch.no_grad():
-    outputs = model(X_test_tensor)
-    _, predicted = torch.max(outputs, 1)
-    accuracy = (predicted == y_test_tensor).float().mean().item()
-    clearml_logger.report_scalar("validation", "accuracy", value=accuracy, iteration=0)
-
-print(f'Model trained & stored with accuracy: {accuracy:.4f}')
+print('Training completed successfully')
 
 # Plotting confusion matrix
 species_mapping = {0: 'Setosa', 1: 'Versicolor', 2: 'Virginica'}
