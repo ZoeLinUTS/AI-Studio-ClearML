@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 from clearml import Task, Logger, Dataset
+from clearml.automation import HyperParameterOptimizer
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -46,7 +47,8 @@ task.execute_remotely()
 
 # Get the HPO task and find the best experiment
 hpo_task = Task.get_task(task_id=args['hpo_task_id'])
-top_exp = hpo_task.get_top_experiments(top_k=1)[0]  # Get the best experiment
+hpo = HyperParameterOptimizer.get_optimizer(hpo_task)
+top_exp = hpo.get_top_experiments(top_k=1)[0]  # Get the best experiment
 logger.info(f"Found best experiment: {top_exp.id}")
 
 # Get the best hyperparameters

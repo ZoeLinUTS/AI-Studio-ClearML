@@ -68,7 +68,7 @@ def run_pipeline():
     # Add HPO step
     pipe.add_step(
         name="stage_hpo",
-        parents=["stage_train"],
+        parents=["stage_train", "stage_process", "stage_data"],
         base_task_project="AI_Studio_Demo",
         base_task_name="HPO: Train Model",
         execution_queue=EXECUTION_QUEUE,
@@ -86,7 +86,7 @@ def run_pipeline():
     # Add final model training step
     pipe.add_step(
         name="stage_final_model",
-        parents=["stage_hpo"],
+        parents=["stage_hpo", "stage_process"],
         base_task_project="AI_Studio_Demo",
         base_task_name="Final Model Training",
         execution_queue=EXECUTION_QUEUE,
