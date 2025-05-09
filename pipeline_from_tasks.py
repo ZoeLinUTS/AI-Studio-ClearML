@@ -66,24 +66,19 @@ def run_pipeline():
         }
     )
 
-    # Add training step
+    # Add final model training step
     pipe.add_step(
-        name="stage_train",
-        parents=["stage_process"],
+        name="stage_final_model",
+        parents=["stage_hpo"],
         base_task_project="AI_Studio_Demo",
-        base_task_name="Pipeline step 3 train model",
+        base_task_name="Final Model Training",
         execution_queue=EXECUTION_QUEUE,
         parameter_override={
             "General/processed_dataset_id": "${stage_process.parameters.General/processed_dataset_id}",
-            "General/test_queue": EXECUTION_QUEUE,
-            "General/num_epochs": 20,
-            "General/batch_size": 16,
-            "General/learning_rate": 1e-3,
-            "General/weight_decay": 1e-5
+            "General/hpo_task_id": "${stage_hpo.id}",
+            "General/test_queue": EXECUTION_QUEUE
         }
     )
-
-
 
     # Start the pipeline locally but tasks will run on queue
     logger.info("Starting pipeline locally with tasks on queue: %s", EXECUTION_QUEUE)
