@@ -18,7 +18,7 @@ task = Task.init(
 
 # Connect parameters
 args = {
-    'base_train_task_id': 'd462790f2efa4daea96ed0b7e1a1003c',  # Will be set from pipeline
+    'base_train_task_id': '8b3f72f435704677abe4e27323d3eba3',  # Will be set from pipeline
     'num_trials': 10,
     'time_limit_minutes': 60,
     'run_as_service': False,
@@ -55,10 +55,10 @@ if not dataset_id:
 
 # Get the actual training model task
 try:
-    BASE_TRAIN_TASK_ID = Task.get_task(project_name="AI_Studio_Demo", task_name="Pipeline step 3 train model").id
-    logger.info(f"Found base training task with ID: {BASE_TRAIN_TASK_ID}")
+    BASE_TRAIN_TASK_ID = args['base_train_task_id']
+    logger.info(f"Using base training task ID: {BASE_TRAIN_TASK_ID}")
 except Exception as e:
-    logger.error(f"Failed to get base training task: {e}")
+    logger.error(f"Failed to get base training task ID: {e}")
     raise
 
 # Verify dataset exists
@@ -73,10 +73,10 @@ except Exception as e:
 hpo_task = HyperParameterOptimizer(
     base_task_id=BASE_TRAIN_TASK_ID,
     hyper_parameters=[
-        UniformIntegerParameterRange('General/num_epochs', min_value=10, max_value=args['num_epochs']),
-        UniformIntegerParameterRange('General/batch_size', min_value=8, max_value=args['batch_size']),
-        UniformParameterRange('General/learning_rate', min_value=1e-4, max_value=args['learning_rate']),
-        UniformParameterRange('General/weight_decay', min_value=1e-6, max_value=args['weight_decay'])
+        UniformIntegerParameterRange('num_epochs', min_value=10, max_value=args['num_epochs']),
+        UniformIntegerParameterRange('batch_size', min_value=8, max_value=args['batch_size']),
+        UniformParameterRange('learning_rate', min_value=1e-4, max_value=args['learning_rate']),
+        UniformParameterRange('weight_decay', min_value=1e-6, max_value=args['weight_decay'])
     ],
     objective_metric_title='validation',
     objective_metric_series='accuracy',
@@ -93,39 +93,26 @@ hpo_task = HyperParameterOptimizer(
     parameter_override={
         'processed_dataset_id': dataset_id,  # Pass the dataset ID without namespace
         'General/processed_dataset_id': dataset_id,  # Pass the dataset ID with namespace
-        'General/test_queue': args['test_queue'],  # Pass the test queue
-        'General/num_epochs': args['num_epochs'],  # Pass default num_epochs
-        'General/batch_size': args['batch_size'],  # Pass default batch_size
-        'General/learning_rate': args['learning_rate'],  # Pass default learning_rate
-        'General/weight_decay': args['weight_decay']  # Pass default weight_decay
-    },
-    base_task_name="Pipeline step 3 train model",  # Specify the base task name
-    base_task_project="AI_Studio_Demo",  # Specify the base task project
-    base_task_type=Task.TaskTypes.training,  # Specify the base task type
-    optimization_strategy='random'  # Use random search strategy
+        'test_queue': args['test_queue'],  # Pass the test queue without namespace
+        'General/test_queue': args['test_queue'],  # Pass the test queue with namespace
+        'num_epochs': args['num_epochs'],  # Pass default num_epochs without namespace
+        'General/num_epochs': args['num_epochs'],  # Pass default num_epochs with namespace
+        'batch_size': args['batch_size'],  # Pass default batch_size without namespace
+        'General/batch_size': args['batch_size'],  # Pass default batch_size with namespace
+        'learning_rate': args['learning_rate'],  # Pass default learning_rate without namespace
+        'General/learning_rate': args['learning_rate'],  # Pass default learning_rate with namespace
+        'weight_decay': args['weight_decay'],  # Pass default weight_decay without namespace
+        'General/weight_decay': args['weight_decay']  # Pass default weight_decay with namespace
+    }
 )
 
 # Start the HPO task
 logger.info("Starting HPO task...")
 hpo_task.start()
 
-# Wait for all trials to complete
-logger.info("Waiting for all trials to complete...")
-while True:
-    # Get current progress
-    progress = hpo_task.get_progress()
-    completed_jobs = progress.get('completed_jobs', 0)
-    total_jobs = args['num_trials']
-    
-    logger.info(f"Progress: {completed_jobs}/{total_jobs} trials completed")
-    
-    # Check if all jobs are completed
-    if completed_jobs >= total_jobs:
-        logger.info("All trials completed!")
-        break
-    
-    # Wait before checking again
-    time.sleep(60)  # Check every minute
+# Wait for optimization to complete
+logger.info(f"Waiting for optimization to complete (time limit: {args['time_limit_minutes']} minutes)...")
+time.sleep(args['time_limit_minutes'] * 60)  # Wait for the full time limit
 
 # Get the top performing experiments
 try:

@@ -31,7 +31,6 @@ task = Task.init(
 # Connect parameters
 args = {
     'processed_dataset_id': '',
-    'hpo_task_id': '',
     'test_queue': 'pipeline',
     'num_epochs': 20,
     'batch_size': 16,
