@@ -8,14 +8,21 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from tqdm import tqdm
 import time
 import os
+import pandas as pd
+import logging
+import shutil
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create necessary directories
 os.makedirs('assets', exist_ok=True)
 os.makedirs('figs', exist_ok=True)
 
-# Connecting ClearML with the current process,
+# Connecting ClearML with the current process
 task = Task.init(project_name="AI_Studio_Demo", task_name="Pipeline step 3 train model")
-logger = Logger.current_logger()
+clearml_logger = Logger.current_logger()
 
 # Connect parameters
 args = {
@@ -27,13 +34,17 @@ args = {
 }
 
 task.connect(args)
+logger.info("Connected parameters: %s", args)
 
 # Execute the task remotely
 task.execute_remotely()
 
 # Get the dataset ID from pipeline parameters
 dataset_id = task.get_parameter('General/processed_dataset_id')
+logger.info(f"Received dataset ID from parameters: {dataset_id}")
+
 if not dataset_id:
+    logger.error("Processed dataset ID is null or empty")
     raise ValueError("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
 
 print('Retrieving Iris dataset')
@@ -43,10 +54,27 @@ dataset = Dataset.get(dataset_id=dataset_id)
 print(f"Loaded dataset: {dataset.name}")
 
 # Get the dataframes
-X_train = dataset.get_dataframe("X_train").values
-X_test = dataset.get_dataframe("X_test").values
-y_train = dataset.get_dataframe("y_train").values.ravel()
-y_test = dataset.get_dataframe("y_test").values.ravel()
+dataset_path = dataset.get_mutable_local_copy("X_train.csv")
+X_train = pd.read_csv(os.path.join(dataset_path, "X_train.csv")).values
+
+dataset_path = dataset.get_mutable_local_copy("X_test.csv")
+X_test = pd.read_csv(os.path.join(dataset_path, "X_test.csv")).values
+
+dataset_path = dataset.get_mutable_local_copy("y_train.csv")
+y_train = pd.read_csv(os.path.join(dataset_path, "y_train.csv")).values.ravel()
+
+dataset_path = dataset.get_mutable_local_copy("y_test.csv")
+y_test = pd.read_csv(os.path.join(dataset_path, "y_test.csv")).values.ravel()
+
+# Clean up temporary files and directories
+for file in ["X_train.csv", "X_test.csv", "y_train.csv", "y_test.csv"]:
+    if os.path.exists(file):
+        if os.path.isdir(file):
+            shutil.rmtree(file)
+            logger.info(f"Cleaned up temporary directory: {file}")
+        else:
+            os.remove(file)
+            logger.info(f"Cleaned up temporary file: {file}")
 
 print('Iris dataset loaded successfully')
 
