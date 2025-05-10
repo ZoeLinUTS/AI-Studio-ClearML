@@ -127,22 +127,18 @@ try:
     dataset_path = dataset.get_local_copy()
     logger.info(f"Dataset downloaded to: {dataset_path}")
     
-    # Load training and testing data
-    train_data = pd.read_csv(f"{dataset_path}/train_data.csv")
-    test_data = pd.read_csv(f"{dataset_path}/test_data.csv")
-    
-    # Separate features and labels
-    X_train = train_data.drop('label', axis=1).values
-    y_train = train_data['label'].values
-    X_test = test_data.drop('label', axis=1).values
-    y_test = test_data['label'].values
-    
+    # Load training and testing data from separate files
+    X_train = pd.read_csv(os.path.join(dataset_path, 'X_train.csv')).values
+    X_test = pd.read_csv(os.path.join(dataset_path, 'X_test.csv')).values
+    y_train = pd.read_csv(os.path.join(dataset_path, 'y_train.csv')).values.ravel()
+    y_test = pd.read_csv(os.path.join(dataset_path, 'y_test.csv')).values.ravel()
+
     # Convert to PyTorch tensors
     X_train = torch.FloatTensor(X_train)
     y_train = torch.LongTensor(y_train)
     X_test = torch.FloatTensor(X_test)
     y_test = torch.LongTensor(y_test)
-    
+
     # Create data loaders
     train_dataset = TensorDataset(X_train, y_train)
     test_dataset = TensorDataset(X_test, y_test)
@@ -161,7 +157,7 @@ class SimpleNN(nn.Module):
         super(SimpleNN, self).__init__()
         self.layer1 = nn.Linear(input_size, 128)
         self.layer2 = nn.Linear(128, 64)
-        self.layer3 = nn.Linear(64, 2)  # 2 classes
+        self.layer3 = nn.Linear(64, len(set(y_train.numpy())))  # In case labels change
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(0.3)
         
