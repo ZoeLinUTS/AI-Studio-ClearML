@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 from clearml import Task, Logger, Dataset
-from clearml.automation import HyperParameterOptimizer
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -12,6 +11,9 @@ import os
 import pandas as pd
 import logging
 import shutil
+import json
+import numpy as np
+import seaborn as sns
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -31,9 +33,9 @@ task = Task.init(
 
 # Connect parameters
 args = {
-    'processed_dataset_id': '',
-    'hpo_task_id': '',  # ID of the HPO task to get best parameters from
-    'test_queue': 'pipeline',
+    'processed_dataset_id': '99e286d358754697a37ad75c279a6f0a',  # Will be set from pipeline
+    'hpo_task_id': None,  # Will be set from pipeline
+    'test_queue': 'pipeline',  # Queue for test tasks
     'num_epochs': 50,  # Will be overridden by best HPO parameters
     'batch_size': 32,  # Will be overridden by best HPO parameters
     'learning_rate': 1e-3,  # Will be overridden by best HPO parameters
@@ -45,31 +47,56 @@ logger.info(f"Connected parameters: {args}")
 # Execute the task remotely
 task.execute_remotely()
 
-# Get the HPO task and find the best experiment
-hpo_task = Task.get_task(task_id=args['hpo_task_id'])
-hpo = HyperParameterOptimizer.get_optimizer(hpo_task)
-top_exp = hpo.get_top_experiments(top_k=1)[0]  # Get the best experiment
-logger.info(f"Found best experiment: {top_exp.id}")
-
-# Get the best hyperparameters
-best_params = top_exp.get_parameters()
-args['num_epochs'] = best_params.get('num_epochs', args['num_epochs'])
-args['batch_size'] = best_params.get('batch_size', args['batch_size'])
-args['learning_rate'] = best_params.get('learning_rate', args['learning_rate'])
-args['weight_decay'] = best_params.get('weight_decay', args['weight_decay'])
-logger.info(f"Using best hyperparameters: {args}")
-
 # Get the dataset ID from pipeline parameters
-dataset_id = task.get_parameter('processed_dataset_id')
+dataset_id = task.get_parameter('General/processed_dataset_id')  # Get from General namespace
 if not dataset_id:
-    dataset_id = task.get_parameter('General/processed_dataset_id')
-    logger.info(f"Got dataset ID from General namespace: {dataset_id}")
+    # Try getting from args as fallback
+    dataset_id = args.get('processed_dataset_id')
+    print(f"No dataset_id now get dataset ID from args: {dataset_id}")
+
+if not dataset_id:
+    # Use fixed dataset ID as last resort
+    dataset_id = "99e286d358754697a37ad75c279a6f0a"
+    print(f"Using fixed dataset ID: {dataset_id}")
 
 logger.info(f"Received dataset ID from parameters: {dataset_id}")
 
 if not dataset_id:
     logger.error("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
     raise ValueError("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
+
+# Get the HPO task ID
+hpo_task_id = args.get('hpo_task_id')
+if not hpo_task_id:
+    logger.error("HPO task ID not found in parameters")
+    raise ValueError("HPO task ID not found in parameters")
+
+# Get the HPO task
+hpo_task = Task.get_task(task_id=hpo_task_id)
+logger.info(f"Retrieved HPO task: {hpo_task.name}")
+
+# Get best parameters from artifact
+try:
+    # Download the artifact
+    artifact_path = hpo_task.artifacts['best_parameters'].get_local_copy()
+    logger.info(f"Downloaded best parameters from: {artifact_path}")
+    
+    # Read the parameters
+    with open(artifact_path, 'r') as f:
+        best_results = json.load(f)
+    
+    # Update training parameters with best values
+    best_params = best_results['parameters']
+    args['num_epochs'] = best_params.get('num_epochs', args['num_epochs'])
+    args['batch_size'] = best_params.get('batch_size', args['batch_size'])
+    args['learning_rate'] = best_params.get('learning_rate', args['learning_rate'])
+    args['weight_decay'] = best_params.get('weight_decay', args['weight_decay'])
+    
+    logger.info(f"Using best parameters from HPO: {best_params}")
+    logger.info(f"Best validation accuracy from HPO: {best_results.get('accuracy')}")
+except Exception as e:
+    logger.error(f"Failed to get best parameters from HPO task: {e}")
+    raise
 
 # Verify dataset exists
 try:
@@ -79,150 +106,114 @@ except Exception as e:
     logger.error(f"Failed to verify dataset: {e}")
     raise
 
-# Get the dataset files
-dataset_path = dataset.get_local_copy()
-logger.info(f"Dataset downloaded to: {dataset_path}")
-
 # Load the data
-X_train = pd.read_csv(os.path.join(dataset_path, 'X_train.csv'))
-X_test = pd.read_csv(os.path.join(dataset_path, 'X_test.csv'))
-y_train = pd.read_csv(os.path.join(dataset_path, 'y_train.csv'))
-y_test = pd.read_csv(os.path.join(dataset_path, 'y_test.csv'))
+try:
+    # Get the dataset path
+    dataset_path = dataset.get_local_copy()
+    logger.info(f"Dataset downloaded to: {dataset_path}")
+    
+    # Load training and testing data
+    train_data = pd.read_csv(f"{dataset_path}/train_data.csv")
+    test_data = pd.read_csv(f"{dataset_path}/test_data.csv")
+    
+    # Separate features and labels
+    X_train = train_data.drop('label', axis=1).values
+    y_train = train_data['label'].values
+    X_test = test_data.drop('label', axis=1).values
+    y_test = test_data['label'].values
+    
+    # Convert to PyTorch tensors
+    X_train = torch.FloatTensor(X_train)
+    y_train = torch.LongTensor(y_train)
+    X_test = torch.FloatTensor(X_test)
+    y_test = torch.LongTensor(y_test)
+    
+    # Create data loaders
+    train_dataset = TensorDataset(X_train, y_train)
+    test_dataset = TensorDataset(X_test, y_test)
+    
+    train_loader = DataLoader(train_dataset, batch_size=args['batch_size'], shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=args['batch_size'], shuffle=False)
+    
+    logger.info(f"Data loaded successfully. Training samples: {len(X_train)}, Testing samples: {len(X_test)}")
+except Exception as e:
+    logger.error(f"Failed to load data: {e}")
+    raise
 
-# Clean up temporary files
-for file in ['X_train.csv', 'X_test.csv', 'y_train.csv', 'y_test.csv']:
-    try:
-        os.remove(os.path.join(dataset_path, file))
-        logger.info(f"Cleaned up temporary directory: {file}")
-    except Exception as e:
-        logger.warning(f"Failed to clean up {file}: {e}")
-
-# Convert to numpy arrays
-X_train = X_train.values
-X_test = X_test.values
-y_train = y_train.values.ravel()
-y_test = y_test.values.ravel()
-
-# Create data loaders
-train_dataset = TensorDataset(
-    torch.FloatTensor(X_train),
-    torch.LongTensor(y_train)
-)
-test_dataset = TensorDataset(
-    torch.FloatTensor(X_test),
-    torch.LongTensor(y_test)
-)
-
-train_loader = DataLoader(
-    train_dataset,
-    batch_size=args['batch_size'],
-    shuffle=True
-)
-test_loader = DataLoader(
-    test_dataset,
-    batch_size=args['batch_size'],
-    shuffle=False
-)
-
-# Define a simple neural network
+# Define the model
 class SimpleNN(nn.Module):
-    def __init__(self, input_size, num_classes):
+    def __init__(self, input_size):
         super(SimpleNN, self).__init__()
-        self.fc1 = nn.Linear(input_size, 50)
-        self.fc2 = nn.Linear(50, num_classes)
-
+        self.layer1 = nn.Linear(input_size, 128)
+        self.layer2 = nn.Linear(128, 64)
+        self.layer3 = nn.Linear(64, 2)  # 2 classes
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.3)
+        
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = self.fc2(x)
+        x = self.relu(self.layer1(x))
+        x = self.dropout(x)
+        x = self.relu(self.layer2(x))
+        x = self.dropout(x)
+        x = self.layer3(x)
         return x
 
 # Initialize model, loss function, and optimizer
-model = SimpleNN(input_size=X_train.shape[1], num_classes=len(set(y_train)))
+model = SimpleNN(X_train.shape[1])
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(
-    model.parameters(),
-    lr=args['learning_rate'],
-    weight_decay=args['weight_decay']
-)
+optimizer = optim.Adam(model.parameters(), lr=args['learning_rate'], weight_decay=args['weight_decay'])
 
 # Training loop
-best_accuracy = 0
-for epoch in tqdm(range(args['num_epochs']), desc="Training Epochs"):
+logger.info("Starting training...")
+for epoch in range(args['num_epochs']):
     model.train()
-    total_loss = 0
-    for batch_X, batch_y in train_loader:
+    running_loss = 0.0
+    
+    for inputs, labels in train_loader:
         optimizer.zero_grad()
-        outputs = model(batch_X)
-        loss = criterion(outputs, batch_y)
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
-        total_loss += loss.item()
+        running_loss += loss.item()
     
-    avg_loss = total_loss / len(train_loader)
     # Report training loss
-    task.get_logger().report_scalar(
-        title='train',
-        series='epoch_loss',
-        value=avg_loss,
-        iteration=epoch
-    )
+    avg_loss = running_loss / len(train_loader)
+    task.get_logger().report_scalar('training', 'loss', value=avg_loss, iteration=epoch)
+    logger.info(f'Epoch {epoch+1}/{args["num_epochs"]}, Loss: {avg_loss:.4f}')
     
     # Validation
     model.eval()
     correct = 0
     total = 0
-    all_predictions = []
-    all_targets = []
+    all_preds = []
+    all_labels = []
+    
     with torch.no_grad():
-        for batch_X, batch_y in test_loader:
-            outputs = model(batch_X)
+        for inputs, labels in test_loader:
+            outputs = model(inputs)
             _, predicted = torch.max(outputs.data, 1)
-            total += batch_y.size(0)
-            correct += (predicted == batch_y).sum().item()
-            all_predictions.extend(predicted.cpu().numpy())
-            all_targets.extend(batch_y.cpu().numpy())
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+            all_preds.extend(predicted.numpy())
+            all_labels.extend(labels.numpy())
     
     accuracy = 100 * correct / total
-    # Report validation accuracy
-    task.get_logger().report_scalar(
-        title='validation',
-        series='accuracy',
-        value=accuracy,
-        iteration=epoch
-    )
-    
-    # Save best model
-    if accuracy > best_accuracy:
-        best_accuracy = accuracy
-        model_path = os.path.join(os.getcwd(), 'best_model.pth')
-        torch.save(model.state_dict(), model_path)
-        task.upload_artifact('best_model', model_path)
-        logger.info(f"New best model saved with accuracy: {accuracy:.2f}%")
+    task.get_logger().report_scalar('validation', 'accuracy', value=accuracy, iteration=epoch)
+    logger.info(f'Validation Accuracy: {accuracy:.2f}%')
 
-# Plotting confusion matrix
-species_mapping = {0: 'Setosa', 1: 'Versicolor', 2: 'Virginica'}
-y_test_names = [species_mapping[label] for label in all_targets]
-predicted_names = [species_mapping[label] for label in all_predictions]
-
-cm = confusion_matrix(y_test_names, predicted_names, labels=list(species_mapping.values()))
-disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=list(species_mapping.values()))
-disp.plot(cmap=plt.cm.Blues)
-
+# Plot confusion matrix
+cm = confusion_matrix(all_labels, all_preds)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 plt.title('Confusion Matrix')
-plt.savefig('figs/confusion_matrix.png')
-task.upload_artifact('confusion_matrix', 'figs/confusion_matrix.png')
+plt.ylabel('True Label')
+plt.xlabel('Predicted Label')
+task.get_logger().report_matplotlib_figure('Confusion Matrix', 'confusion_matrix', plt.gcf(), epoch)
 
-# Save final results
-results = {
-    'best_accuracy': best_accuracy,
-    'best_hyperparameters': {
-        'num_epochs': args['num_epochs'],
-        'batch_size': args['batch_size'],
-        'learning_rate': args['learning_rate'],
-        'weight_decay': args['weight_decay']
-    }
-}
-task.upload_artifact('final_results', results)
+# Save the final model
+torch.save(model.state_dict(), 'final_model.pth')
+task.upload_artifact('model', 'final_model.pth')
+logger.info("Model saved and uploaded as artifact")
 
-logger.info(f"Training completed with best accuracy: {best_accuracy:.2f}%")
-print('Training completed successfully') 
+print('Training completed successfully!') 

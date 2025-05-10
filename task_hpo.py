@@ -3,6 +3,8 @@ from clearml.automation import HyperParameterOptimizer
 from clearml.automation import UniformIntegerParameterRange, UniformParameterRange
 import logging
 import time
+import json
+import os
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -116,17 +118,33 @@ time.sleep(args['time_limit_minutes'] * 60)  # Wait for the full time limit
 
 # Get the top performing experiments
 try:
-    top_exp = hpo_task.get_top_experiments(top_k=3)
+    top_exp = hpo_task.get_top_experiments(top_k=1)  # Get only the best experiment
     if top_exp:
-        logger.info(f"Top experiments: {[t.id for t in top_exp]}")
-        for exp in top_exp:
-            # Get the last reported value for validation accuracy
-            metrics = exp.get_last_scalar_metrics()
-            if metrics and 'validation' in metrics and 'accuracy' in metrics['validation']:
-                accuracy = metrics['validation']['accuracy']
-                logger.info(f"Experiment {exp.id} accuracy: {accuracy}")
-            else:
-                logger.warning(f"Experiment {exp.id} has no validation accuracy metric")
+        best_exp = top_exp[0]
+        logger.info(f"Best experiment: {best_exp.id}")
+        
+        # Get the best parameters and accuracy
+        best_params = best_exp.get_parameters()
+        metrics = best_exp.get_last_scalar_metrics()
+        best_accuracy = metrics['validation']['accuracy'] if metrics and 'validation' in metrics and 'accuracy' in metrics['validation'] else None
+        
+        # Save best parameters and accuracy
+        best_results = {
+            'parameters': best_params,
+            'accuracy': best_accuracy
+        }
+        
+        # Save to a temporary file
+        temp_file = 'best_parameters.json'
+        with open(temp_file, 'w') as f:
+            json.dump(best_results, f, indent=4)
+        
+        # Upload as artifact
+        task.upload_artifact('best_parameters', temp_file)
+        logger.info(f"Saved best parameters with accuracy: {best_accuracy}")
+        
+        # Clean up
+        os.remove(temp_file)
     else:
         logger.warning("No experiments completed yet. This might be normal if the optimization just started.")
 except Exception as e:
