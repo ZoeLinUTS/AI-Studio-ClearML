@@ -75,25 +75,40 @@ if not hpo_task_id:
 hpo_task = Task.get_task(task_id=hpo_task_id)
 logger.info(f"Retrieved HPO task: {hpo_task.name}")
 
-# Get best parameters from artifact
+# Get best parameters
 try:
-    # Download the artifact
-    artifact_path = hpo_task.artifacts['best_parameters'].get_local_copy()
-    logger.info(f"Downloaded best parameters from: {artifact_path}")
+    # First try to get from task parameters
+    best_params = hpo_task.get_parameter('best_parameters')
+    best_accuracy = hpo_task.get_parameter('best_accuracy')
     
-    # Read the parameters
-    with open(artifact_path, 'r') as f:
-        best_results = json.load(f)
+    if best_params is None:
+        # If not in parameters, try to get from artifact
+        logger.info("Best parameters not found in task parameters, trying artifact...")
+        if 'best_parameters' not in hpo_task.artifacts:
+            logger.error("No best_parameters artifact found in HPO task")
+            raise ValueError("No best_parameters artifact found in HPO task")
+            
+        artifact_path = hpo_task.artifacts['best_parameters'].get_local_copy()
+        if artifact_path is None:
+            logger.error("Failed to get local copy of best_parameters artifact")
+            raise ValueError("Failed to get local copy of best_parameters artifact")
+            
+        logger.info(f"Downloaded best parameters from: {artifact_path}")
+        
+        with open(artifact_path, 'r') as f:
+            best_results = json.load(f)
+        
+        best_params = best_results['parameters']
+        best_accuracy = best_results.get('accuracy')
     
     # Update training parameters with best values
-    best_params = best_results['parameters']
     args['num_epochs'] = best_params.get('num_epochs', args['num_epochs'])
     args['batch_size'] = best_params.get('batch_size', args['batch_size'])
     args['learning_rate'] = best_params.get('learning_rate', args['learning_rate'])
     args['weight_decay'] = best_params.get('weight_decay', args['weight_decay'])
     
     logger.info(f"Using best parameters from HPO: {best_params}")
-    logger.info(f"Best validation accuracy from HPO: {best_results.get('accuracy')}")
+    logger.info(f"Best validation accuracy from HPO: {best_accuracy}")
 except Exception as e:
     logger.error(f"Failed to get best parameters from HPO task: {e}")
     raise

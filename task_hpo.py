@@ -21,12 +21,12 @@ task = Task.init(
 # Connect parameters
 args = {
     'base_train_task_id': '8b3f72f435704677abe4e27323d3eba3',  # Will be set from pipeline
-    'num_trials': 10,
-    'time_limit_minutes': 60,
+    'num_trials': 3,  # Reduced from 10 to 3 trials
+    'time_limit_minutes': 10,  # Reduced from 60 to 10 minutes
     'run_as_service': False,
     'test_queue': 'pipeline',  # Queue for test tasks
     'processed_dataset_id': '99e286d358754697a37ad75c279a6f0a',  # Will be set from pipeline
-    'num_epochs': 50,  # Maximum number of epochs for HPO trials
+    'num_epochs': 20,  # Reduced from 50 to 20 epochs
     'batch_size': 32,  # Default batch size
     'learning_rate': 1e-3,  # Default learning rate
     'weight_decay': 1e-5  # Default weight decay
@@ -42,18 +42,14 @@ dataset_id = task.get_parameter('General/processed_dataset_id')  # Get from Gene
 if not dataset_id:
     # Try getting from args as fallback
     dataset_id = args.get('processed_dataset_id')
-    print(f"No dataset_id now get dataset ID from args: {dataset_id}")
+    logger.info(f"No dataset_id in General namespace, using from args: {dataset_id}")
 
 if not dataset_id:
     # Use fixed dataset ID as last resort
     dataset_id = "99e286d358754697a37ad75c279a6f0a"
-    print(f"Using fixed dataset ID: {dataset_id}")
+    logger.info(f"Using fixed dataset ID: {dataset_id}")
 
-logger.info(f"Received dataset ID from parameters: {dataset_id}")
-
-if not dataset_id:
-    logger.error("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
-    raise ValueError("Processed dataset ID not found in parameters. Please ensure it's passed from the pipeline.")
+logger.info(f"Using dataset ID: {dataset_id}")
 
 # Get the actual training model task
 try:
@@ -76,9 +72,9 @@ hpo_task = HyperParameterOptimizer(
     base_task_id=BASE_TRAIN_TASK_ID,
     hyper_parameters=[
         UniformIntegerParameterRange('num_epochs', min_value=10, max_value=args['num_epochs']),
-        UniformIntegerParameterRange('batch_size', min_value=8, max_value=args['batch_size']),
-        UniformParameterRange('learning_rate', min_value=1e-4, max_value=args['learning_rate']),
-        UniformParameterRange('weight_decay', min_value=1e-6, max_value=args['weight_decay'])
+        UniformIntegerParameterRange('batch_size', min_value=16, max_value=64),  # Reduced range
+        UniformParameterRange('learning_rate', min_value=1e-4, max_value=1e-2),  # Reduced range
+        UniformParameterRange('weight_decay', min_value=1e-6, max_value=1e-4)  # Reduced range
     ],
     objective_metric_title='validation',
     objective_metric_series='accuracy',
@@ -89,22 +85,22 @@ hpo_task = HyperParameterOptimizer(
     total_max_jobs=args['num_trials'],
     min_iteration_per_job=1,
     max_iteration_per_job=args['num_epochs'],
-    pool_period_min=2.0,
+    pool_period_min=1.0,  # Reduced from 2.0 to 1.0 to check more frequently
     execution_queue=args['test_queue'],
-    save_top_k_tasks_only=5,
-    parameter_override={# This is for debug, you may not need them for your own project
-        'processed_dataset_id': dataset_id,  # Pass the dataset ID without namespace
-        'General/processed_dataset_id': dataset_id,  # Pass the dataset ID with namespace
-        'test_queue': args['test_queue'],  # Pass the test queue without namespace
-        'General/test_queue': args['test_queue'],  # Pass the test queue with namespace
-        'num_epochs': args['num_epochs'],  # Pass default num_epochs without namespace
-        'General/num_epochs': args['num_epochs'],  # Pass default num_epochs with namespace
-        'batch_size': args['batch_size'],  # Pass default batch_size without namespace
-        'General/batch_size': args['batch_size'],  # Pass default batch_size with namespace
-        'learning_rate': args['learning_rate'],  # Pass default learning_rate without namespace
-        'General/learning_rate': args['learning_rate'],  # Pass default learning_rate with namespace
-        'weight_decay': args['weight_decay'],  # Pass default weight_decay without namespace
-        'General/weight_decay': args['weight_decay']  # Pass default weight_decay with namespace
+    save_top_k_tasks_only=2,  # Reduced from 5 to 2
+    parameter_override={
+        'processed_dataset_id': dataset_id,
+        'General/processed_dataset_id': dataset_id,
+        'test_queue': args['test_queue'],
+        'General/test_queue': args['test_queue'],
+        'num_epochs': args['num_epochs'],
+        'General/num_epochs': args['num_epochs'],
+        'batch_size': args['batch_size'],
+        'General/batch_size': args['batch_size'],
+        'learning_rate': args['learning_rate'],
+        'General/learning_rate': args['learning_rate'],
+        'weight_decay': args['weight_decay'],
+        'General/weight_decay': args['weight_decay']
     }
 )
 
@@ -128,6 +124,14 @@ try:
         metrics = best_exp.get_last_scalar_metrics()
         best_accuracy = metrics['validation']['accuracy'] if metrics and 'validation' in metrics and 'accuracy' in metrics['validation'] else None
         
+        # Log detailed information about the best experiment
+        logger.info("Best experiment parameters:")
+        logger.info(f"  - num_epochs: {best_params.get('num_epochs')}")
+        logger.info(f"  - batch_size: {best_params.get('batch_size')}")
+        logger.info(f"  - learning_rate: {best_params.get('learning_rate')}")
+        logger.info(f"  - weight_decay: {best_params.get('weight_decay')}")
+        logger.info(f"Best validation accuracy: {best_accuracy}")
+        
         # Save best parameters and accuracy
         best_results = {
             'parameters': best_params,
@@ -143,8 +147,11 @@ try:
         task.upload_artifact('best_parameters', temp_file)
         logger.info(f"Saved best parameters with accuracy: {best_accuracy}")
         
-        # Clean up
-        os.remove(temp_file)
+        # Also save as task parameters for easier access
+        task.set_parameter('best_parameters', best_params)
+        task.set_parameter('best_accuracy', best_accuracy)
+        
+        logger.info("Best parameters saved as both artifact and task parameters")
     else:
         logger.warning("No experiments completed yet. This might be normal if the optimization just started.")
 except Exception as e:
