@@ -75,8 +75,8 @@ def run_pipeline():
         parameter_override={
             "General/processed_dataset_id": "${stage_process.parameters.General/processed_dataset_id}",
             "General/test_queue": EXECUTION_QUEUE,
-            "General/num_trials": 10,
-            "General/time_limit_minutes": 60,
+            "General/num_trials": 4,
+            "General/time_limit_minutes": 20,
             "General/run_as_service": False,
             "General/dataset_task_id": "${stage_data.id}",
             "General/base_train_task_id": "${stage_train.id}"
